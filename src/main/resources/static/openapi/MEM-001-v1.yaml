@@ -76,12 +76,19 @@ paths:
       operationId: deletePhoto
       summary: Excluir uma fotografia do proprietário atual
       x-memora-contract-id: MEM-001-API-05
+      x-memora-error-codes:
+        '404': [not_found]
+        '409': [state_conflict, photo_attached]
       parameters:
         - { in: path, name: photoId, required: true, schema: { type: string, format: uuid } }
       responses:
         '204': { description: Fotografia excluída. }
         '404': { $ref: '#/components/responses/Problem' }
-        '409': { $ref: '#/components/responses/Problem' }
+        '409':
+          description: Estado incompatível ou fotografia ainda associada a um mural.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 components:
   schemas:
     Photo:

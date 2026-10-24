@@ -81,6 +81,12 @@ public class MuralEntity {
         updatedAt = mural.updatedAt();
     }
 
+    public void touch(java.time.Instant now) {
+        // PostgreSQL stores timestamptz to microsecond precision. Keep the entity dirty even
+        // when two effective mutations happen inside one clock tick so @Version advances once.
+        updatedAt = now.isAfter(updatedAt) ? now : updatedAt.plusNanos(1_000);
+    }
+
     public String requestHash() {
         return requestHash;
     }

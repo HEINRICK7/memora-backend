@@ -1,0 +1,213 @@
+openapi: 3.1.0
+info:
+  title: Memora Mural Photo Association API
+  version: 1.0.0
+  description: Contrato HTTP para associar, ordenar e remover vínculos de fotos de murais (MEM-006).
+servers:
+  - url: /api/v1
+paths:
+  /murals/{muralId}/photos:
+    parameters:
+      - in: path
+        name: muralId
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: listOwnedMuralPhotos
+      summary: Listar fotos do mural com URLs temporárias
+      x-memora-contract-id: MEM-006-API-01
+      responses:
+        '200':
+          description: Fotos READY na ordem do mural; previewUrl é temporária e privada.
+          headers:
+            Cache-Control: { schema: { type: string, const: 'private, no-store' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MuralPhotoViewCollection' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: attachReadyPhotoToMural
+      summary: Associar uma foto READY ao fim do mural
+      x-memora-contract-id: MEM-006-API-02
+      x-memora-error-codes:
+        '400': [invalid_if_match, invalid_request]
+        '404': [resource_not_found]
+        '409': [stale_mural_version, mural_not_editable, photo_not_ready]
+        '428': [precondition_required]
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [photoId]
+              additionalProperties: false
+              properties:
+                photoId: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Novo vínculo criado e acrescentado ao fim.
+          headers:
+            Cache-Control: { schema: { type: string, const: 'private, no-store' } }
+            ETag: { schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MuralPhotoLink' }
+        '200':
+          description: O vínculo já existia; a operação não incrementou a versão.
+          headers:
+            Cache-Control: { schema: { type: string, const: 'private, no-store' } }
+            ETag: { schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MuralPhotoLink' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '428': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /murals/{muralId}/photos/order:
+    put:
+      operationId: reorderOwnedMuralPhotos
+      summary: Substituir a ordem completa das fotos do mural
+      x-memora-contract-id: MEM-006-API-03
+      x-memora-error-codes:
+        '400': [invalid_if_match, invalid_request]
+        '404': [resource_not_found]
+        '409': [stale_mural_version, mural_not_editable]
+        '422': [invalid_photo_order]
+        '428': [precondition_required]
+      parameters:
+        - in: path
+          name: muralId
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [photoIds]
+              additionalProperties: false
+              properties:
+                photoIds:
+                  type: array
+                  uniqueItems: true
+                  items: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Posições finais confirmadas após uma única transação.
+          headers:
+            Cache-Control: { schema: { type: string, const: 'private, no-store' } }
+            ETag: { schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MuralPhotoLinkCollection' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '428': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /murals/{muralId}/photos/{photoId}:
+    delete:
+      operationId: detachPhotoFromOwnedMural
+      summary: Remover um vínculo sem apagar a fotografia
+      x-memora-contract-id: MEM-006-API-04
+      x-memora-error-codes:
+        '400': [invalid_if_match]
+        '404': [resource_not_found]
+        '409': [stale_mural_version, mural_not_editable]
+        '428': [precondition_required]
+      parameters:
+        - in: path
+          name: muralId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: photoId
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: Vínculo removido; arquivo e ativo permanecem READY.
+          headers:
+            Cache-Control: { schema: { type: string, const: 'private, no-store' } }
+            ETag: { schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '428': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    IfMatch:
+      in: header
+      name: If-Match
+      required: true
+      description: ETag forte da versão pública de GET /murals/{muralId}, por exemplo "2".
+      schema: { type: string, pattern: '^"[1-9][0-9]*"$' }
+  schemas:
+    MuralPhotoLink:
+      type: object
+      additionalProperties: false
+      required: [photoId, position]
+      properties:
+        photoId: { type: string, format: uuid }
+        position: { type: integer, minimum: 0 }
+    MuralPhotoLinkCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MuralPhotoLink' }
+    MuralPhotoView:
+      type: object
+      additionalProperties: false
+      required: [photoId, position, contentType, sizeBytes, previewUrl, previewExpiresAt]
+      properties:
+        photoId: { type: string, format: uuid }
+        position: { type: integer, minimum: 0 }
+        contentType: { type: string, enum: [image/jpeg, image/png] }
+        sizeBytes: { type: integer, minimum: 1, maximum: 20971520 }
+        previewUrl: { type: string, format: uri, description: URL assinada temporária; nunca persistida. }
+        previewExpiresAt: { type: string, format: date-time }
+    MuralPhotoViewCollection:
+      type: object
+      additionalProperties: false
+      required: [muralVersion, items]
+      properties:
+        muralVersion: { type: integer, minimum: 1 }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MuralPhotoView' }
+    Problem:
+      type: object
+      required: [type, title, status, detail, code, traceId]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        traceId: { type: string, format: uuid }
+  responses:
+    Problem:
+      description: Problem Details sem identidade, storage key ou URL assinada.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }

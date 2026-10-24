@@ -70,14 +70,18 @@ Somente fotos READY do proprietário atual aparecem. URLs são temporários e nu
 
 ## MEM-001-API-05 — Excluir fotografia
 
-DELETE /api/v1/photos/{photoId} retorna 204 No Content. A operação autoriza pelo proprietário; ativo inexistente ou de outro proprietário não revela existência. Marca exclusão no banco e solicita remoção do objeto.
+DELETE /api/v1/photos/{photoId} retorna 204 No Content quando a foto pertence ao proprietário e não está associada a mural. Ativo inexistente ou de outro proprietário não revela existência.
+
+- Se houver qualquer vínculo `MuralPhoto`, responder `409 Conflict`, `code: photo_attached`; não marcar `DELETED`, não alterar vínculos e não solicitar remoção ao MinIO. O cliente deve desassociar o ativo de todos os murais antes de excluir.
+- Associação concorrente e exclusão bloqueiam/serializam pela mesma linha do ativo. Se a associação vencer, a exclusão observa o vínculo e responde `409 photo_attached`. Se a exclusão vencer, persiste `DELETED` e a associação posterior responde `409 photo_not_ready` sem inserir vínculo.
+- Após aceitar exclusão sem vínculos, o banco transiciona o ativo para `DELETED` e solicita remoção do objeto. Se MinIO falhar, o objeto permanece privado, não pode receber nova URL assinada e a operação de limpeza pode ser repetida.
 
 ## Identidade e erros
 
 - Perfil local: principal fixo local-development-owner, habilitado somente por configuração explícita do Compose local.
 - Perfil diferente do local exige autenticação configurada; não aceita principal fixo nem header de identidade arbitrário.
 - Erros seguem Problem Details com status, code, detail e traceId.
-- 400 formato/metadados inválidos; 401 não autenticado fora do perfil local; 404 recurso não acessível; 409 estado conflitante; 413 arquivo excede limite; 415 formato não aceito; 5xx dependência indisponível.
+- 400 formato/metadados inválidos; 401 não autenticado fora do perfil local; 404 recurso não acessível; 409 estado conflitante (`photo_attached` quando houver vínculo); 413 arquivo excede limite; 415 formato não aceito; 5xx dependência indisponível.
 - CORS da API e do endpoint S3 MinIO permite apenas http://localhost:{MEMORA_WEB_PORT} e http://127.0.0.1:{MEMORA_WEB_PORT} no perfil local (3000 por padrão). O MinIO OSS fixado aplica essa lista globalmente ao endpoint e usa o conjunto fixo de métodos/cabeçalhos do middleware; isso não concede autorização nem leitura anônima.
 - Nenhuma resposta inclui credenciais, chave S3, token compartilhável ou URL permanente privada.
 

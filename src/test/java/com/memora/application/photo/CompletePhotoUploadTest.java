@@ -132,6 +132,12 @@ class CompletePhotoUploadTest {
                             && asset.status() == PhotoStatus.READY)
                     .toList();
         }
+
+        @Override
+        public PhotoAsset deleteIfUnattached(UUID id, String ownerId, java.time.Instant now) {
+            PhotoAsset asset = findByIdAndOwner(id, ownerId).orElseThrow(PhotoNotFoundException::new);
+            return save(asset.delete(now));
+        }
     }
 
     private static final class RecordingStorage implements PhotoStorage {

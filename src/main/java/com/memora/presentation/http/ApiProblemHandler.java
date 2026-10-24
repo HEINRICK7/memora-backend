@@ -1,10 +1,15 @@
 package com.memora.presentation.http;
 
 import com.memora.application.photo.PhotoNotFoundException;
+import com.memora.application.photo.PhotoAttachedException;
 import com.memora.application.mural.MuralIdempotencyConflictException;
 import com.memora.application.mural.MuralNotFoundException;
 import com.memora.application.mural.MuralQueryException;
 import com.memora.application.mural.MuralStaleVersionException;
+import com.memora.application.mural.MuralPhotoResourceNotFoundException;
+import com.memora.application.mural.PhotoNotReadyException;
+import com.memora.domain.mural.InvalidMuralPhotoOrderException;
+import com.memora.domain.mural.MuralPhotoNotFoundException;
 import com.memora.domain.photo.PhotoStateConflictException;
 import com.memora.domain.photo.PhotoValidationException;
 import com.memora.domain.photo.UploadExpiredException;
@@ -59,6 +64,32 @@ public class ApiProblemHandler {
     @ExceptionHandler(InvalidIfMatchException.class)
     ResponseEntity<ProblemDetail> invalidIfMatch(HttpServletRequest request) {
         return problem(HttpStatus.BAD_REQUEST, "invalid_if_match", "O header If-Match é inválido.", request);
+    }
+
+    @ExceptionHandler(MuralPhotoRequestException.class)
+    ResponseEntity<ProblemDetail> invalidMuralPhotoRequest(HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "invalid_request", "Os dados enviados são inválidos.", request);
+    }
+
+    @ExceptionHandler({MuralPhotoResourceNotFoundException.class, MuralPhotoNotFoundException.class})
+    ResponseEntity<ProblemDetail> muralPhotoNotFound(HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "resource_not_found", "O recurso solicitado não está disponível.", request);
+    }
+
+    @ExceptionHandler(PhotoNotReadyException.class)
+    ResponseEntity<ProblemDetail> photoNotReady(HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "photo_not_ready", "A fotografia ainda não está pronta.", request);
+    }
+
+    @ExceptionHandler(PhotoAttachedException.class)
+    ResponseEntity<ProblemDetail> photoAttached(HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "photo_attached", "A fotografia ainda está associada a um mural.", request);
+    }
+
+    @ExceptionHandler(InvalidMuralPhotoOrderException.class)
+    ResponseEntity<ProblemDetail> invalidMuralPhotoOrder(HttpServletRequest request) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "invalid_photo_order",
+                "A ordem precisa conter cada fotografia associada exatamente uma vez.", request);
     }
 
     @ExceptionHandler(MissingIfMatchException.class)

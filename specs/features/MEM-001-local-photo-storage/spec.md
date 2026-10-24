@@ -25,6 +25,8 @@ Uma pessoa quer escolher fotografias no próprio dispositivo e guardar uma cópi
 - **MEM-001-R08:** o conjunto local — frontend, backend, PostgreSQL e MinIO — inicia pelo Compose. Estado de banco e objetos sobrevive a reinicializações por volumes nomeados.
 - **MEM-001-R09:** portas publicadas no host ficam limitadas a 127.0.0.1; PostgreSQL não é publicado no host.
 - **MEM-001-R10:** a identidade de proprietário deste slice é exclusiva do perfil local e não pode ser usada como identidade de produção.
+- **MEM-001-R11:** excluir ativo READY associado a qualquer mural retorna `409 photo_attached`, sem marcar `DELETED`, apagar bytes ou remover vínculos; primeiro é necessário desassociá-lo de todos os murais.
+- **MEM-001-R12:** exclusão de ativo e associação a mural serializam pela linha do `PhotoAsset`; nunca pode existir `MuralPhoto` para ativo `DELETED`, nem ativo associado cujo objeto MinIO tenha sido removido.
 
 ## Estados
 
@@ -39,6 +41,8 @@ Uma intenção expirada não pode ser completada. Um objeto ainda não validado 
 - Objeto ausente, tamanho divergente ou assinatura incompatível: marcar a intenção como FAILED e remover o objeto inválido quando possível.
 - MinIO/API indisponível: preservar seleção e prévia local; permitir nova tentativa sem selecionar novamente.
 - Ativo ausente ou de outro proprietário: responder sem revelar sua existência.
+- Ativo próprio ainda associado a um mural: responder `409 photo_attached` antes de alterar estado ou solicitar exclusão ao MinIO.
+- Associação concorrente com exclusão: as operações serializam; se anexar vencer, exclusão é recusada e o ativo/objeto permanecem READY; se excluir vencer, associação é recusada e não cria vínculo para ativo DELETED. Falha ao remover objeto deixa-o privado e elegível a retry, sem link ativo.
 
 ## Privacidade e segurança
 
@@ -48,6 +52,7 @@ Uma intenção expirada não pode ser completada. Um objeto ainda não validado 
 - Bucket sem política anônima de leitura.
 - Token, URL assinada, segredo de storage e conteúdo da fotografia não entram em logs ou analytics.
 - Este slice não publica mural nem cria link de compartilhamento.
+- As regras de associação ordenada pertencem a MEM-006. A exclusão de um ativo respeita esses vínculos e não os remove implicitamente.
 - O modo local usa uma identidade fixa de desenvolvimento. Compose publica serviços apenas em loopback e não representa um modo seguro para deploy público.
 
 ## Dependências
@@ -70,9 +75,12 @@ Autenticação OIDC, contas múltiplas, murais, templates, composição, publica
 5. Um GET anônimo ao objeto no MinIO falha; o URL assinado temporário funciona até expirar.
 6. Reiniciar Compose mantém os ativos e metadados.
 7. Todos os serviços necessários podem ser iniciados sem instalar Java ou Node na máquina host.
+8. Excluir foto vinculada resulta em conflito sem mudar estado, metadados, vínculos ou bytes no MinIO; após desassociar de todos os murais, a exclusão pode prosseguir.
+9. Corrida entre associar foto e excluí-la termina em uma única operação válida: vínculo + ativo/objeto READY, ou ativo DELETED sem vínculo. Nunca há FK quebrada, link para foto DELETED ou objeto ativo removido; falha de limpeza deixa objeto privado e retryable.
 
 ## Decisões em aberto
 
 - Provedor de identidade de produção continua pendente; este slice não decide Cognito, Auth.js ou outro provedor.
 - Retenção, exclusão definitiva e geração de derivados ficam para a feature de publicação.
+- Quota e retenção de objeto cujo estado seja DELETED seguem ADRs operacionais; a exclusão concorrente com vínculo segue MEM-001-R11/R12.
 - O limite de 20 MiB é uma regra inicial configurável, a ser revisto com evidência de compatibilidade móvel.

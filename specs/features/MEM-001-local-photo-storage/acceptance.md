@@ -59,3 +59,20 @@
 **Given** o Compose iniciado  
 **Then** API, web e portas do MinIO estão publicadas apenas em loopback  
 **And** PostgreSQL só é acessível na rede interna do Compose.
+
+## MEM-001-AC09 — Não excluir fotografia ainda vinculada
+
+**Given** uma fotografia READY associada a um ou mais murais\
+**When** o proprietário chama `DELETE /api/v1/photos/{photoId}`\
+**Then** a API responde `409 photo_attached`\
+**And** preserva status READY, todas as associações e os bytes privados no MinIO.
+
+## MEM-001-AC10 — Serializar associação e exclusão concorrentes
+
+**Given** uma foto READY sem vínculos e o objeto privado correspondente no MinIO\
+**When** associação ao mural e exclusão do ativo são processadas concorrentemente\
+**Then** as operações serializam pela mesma linha do ativo e somente um resultado final é possível:\
+- se associação concluir primeiro, exclusão responde `409 photo_attached`, ativo permanece READY e objeto permanece; ou\
+- se a transição de exclusão para DELETED concluir primeiro, associação responde `409 photo_not_ready`, nenhuma associação é criada e o objeto é removido ou fica privado para retry.\
+**And** não há erro de FK não tratado, vínculo para ativo DELETED ou objeto disponível publicamente\
+**And** se a remoção MinIO falhar depois da exclusão aceita, o objeto continua privado e a limpeza pode ser repetida.

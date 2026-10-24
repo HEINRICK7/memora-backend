@@ -19,7 +19,7 @@ class ApiCorsConfiguration {
                 .map(String::trim)
                 .filter(origin -> !origin.isEmpty())
                 .toList());
-        cors.setAllowedMethods(java.util.List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
+        cors.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         cors.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "If-Match"));
         cors.setExposedHeaders(java.util.List.of("ETag"));
         cors.setAllowCredentials(false);

@@ -27,14 +27,7 @@ public final class DeletePhoto {
     }
 
     public void execute(UUID photoId) {
-        PhotoAsset asset = repository.findByIdAndOwner(photoId, currentOwner.ownerId())
-                .orElseThrow(PhotoNotFoundException::new);
-        if (asset.status() == com.memora.domain.photo.PhotoStatus.DELETED) {
-            storage.delete(asset.storageKey());
-            return;
-        }
-        PhotoAsset deleted = asset.delete(clock.instant());
-        repository.save(deleted);
+        PhotoAsset deleted = repository.deleteIfUnattached(photoId, currentOwner.ownerId(), clock.instant());
         storage.delete(deleted.storageKey());
     }
 }

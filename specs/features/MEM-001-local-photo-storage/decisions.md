@@ -37,3 +37,9 @@ Risco de segurança: essa release upstream tem quase um ano na data desta decis�
 ## MEM-001-ADR-09 — CORS global no MinIO OSS
 
 A release OSS fixada responde `501 NotImplemented` a `PutBucketCors`; CORS por bucket não está implementado nessa edição. O Compose configura `MINIO_API_CORS_ALLOW_ORIGIN` com as duas origens locais exatas. O middleware OSS define métodos e cabeçalhos globalmente no endpoint S3, portanto essa política cobre os buckets do serviço; o ambiente local mantém apenas o bucket privado do Memora. CORS controla acesso do navegador, não substitui assinatura nem autorização do objeto.
+
+## MEM-001-ADR-10 — Exclusão protegida por vínculos de mural
+
+**Decisão:** `DELETE /photos/{photoId}` não desassocia implicitamente o ativo. Enquanto houver vínculo `MuralPhoto`, responde `409 photo_attached`; a limpeza exige remoção explícita dos vínculos por MEM-006.\
+**Concorrência:** associação e exclusão serializam na mesma linha de `PhotoAsset` dentro do PostgreSQL. A exclusão verifica ausência de vínculos e transiciona READY→DELETED antes de solicitar remoção ao MinIO.\
+**Recuperação:** como DB e MinIO não compartilham transação, falha na remoção mantém o objeto privado e a limpeza é repetível; o ativo DELETED não pode ser associado ou assinado para leitura. Essa decisão impede vínculo órfão e evita apagar conteúdo de outro mural.

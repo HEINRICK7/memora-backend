@@ -2,6 +2,7 @@ package com.memora.infrastructure.persistence;
 
 import com.memora.domain.mural.MuralStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -9,11 +10,16 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import jakarta.persistence.LockModeType;
 
 interface SpringDataMuralRepository extends JpaRepository<MuralEntity, UUID> {
     Optional<MuralEntity> findByOwnerIdAndIdempotencyKey(UUID ownerId, UUID idempotencyKey);
 
     Optional<MuralEntity> findByOwnerIdAndId(UUID ownerId, UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT mural FROM MuralEntity mural WHERE mural.ownerId = :ownerId AND mural.id = :id")
+    Optional<MuralEntity> lockOwnedById(@Param("ownerId") UUID ownerId, @Param("id") UUID id);
 
     @Query("""
             SELECT mural FROM MuralEntity mural
