@@ -1,0 +1,117 @@
+openapi: 3.1.0
+info:
+  title: Memora Mural Metadata API
+  version: 1.0.0
+  description: Contrato para atualizar metadados de rascunhos (MEM-004).
+servers:
+  - url: /api/v1
+paths:
+  /murals/{muralId}:
+    get:
+      operationId: getOwnedMural
+      summary: Obter mural próprio com ETag de versão
+      x-memora-contract-id: MEM-004-API-03
+      parameters:
+        - in: path
+          name: muralId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Mural privado do owner atual.
+          headers:
+            Cache-Control: { schema: { type: string, const: 'private, no-store' } }
+            ETag: { schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MuralSummary' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateMuralMetadata
+      summary: Atualizar título e descrição de um rascunho próprio
+      x-memora-contract-id: MEM-004-API-01
+      x-memora-error-codes:
+        '400': [invalid_if_match, invalid_mural_request]
+        '409': [stale_mural_version, mural_not_editable]
+        '422': [invalid_mural_title, invalid_mural_description]
+        '428': [precondition_required]
+      parameters:
+        - in: path
+          name: muralId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: If-Match
+          required: true
+          description: 'ETag forte com a versão pública lida, por exemplo "2".'
+          schema:
+            type: string
+            pattern: '^"[1-9][0-9]*"$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              additionalProperties: false
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  x-counting: Unicode code points after Unicode White_Space trim
+                description:
+                  type: [string, 'null']
+                  maxLength: 500
+                  x-counting: Unicode code points after Unicode White_Space trim
+      responses:
+        '200':
+          description: Mural atualizado ou operação sem mudança.
+          headers:
+            Cache-Control: { schema: { type: string, const: 'private, no-store' } }
+            ETag: { schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MuralSummary' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '428': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+components:
+  schemas:
+    MuralSummary:
+      type: object
+      additionalProperties: false
+      required: [id, status, version, title, description, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [DRAFT, PUBLISHED, ARCHIVED] }
+        version: { type: integer, minimum: 1 }
+        title: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: [string, 'null'], maxLength: 500 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Problem:
+      type: object
+      required: [type, title, status, detail, code, traceId]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        field: { type: string, enum: [title, description] }
+        traceId: { type: string, format: uuid }
+  responses:
+    Problem:
+      description: Problem Details sem dados de owner ou texto original.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }

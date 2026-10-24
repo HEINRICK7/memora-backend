@@ -1,0 +1,16 @@
+target/
+.m2/
+*.log
+logs/
+.env*
+!.env.example
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+.DS_Store
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

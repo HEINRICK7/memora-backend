@@ -1,0 +1,112 @@
+openapi: 3.1.0
+info:
+  title: Memora Photo Storage API
+  version: 1.0.0
+  description: Contrato HTTP versionado para armazenamento privado de fotografias (MEM-001).
+servers:
+  - url: /api/v1
+paths:
+  /uploads:
+    post:
+      operationId: createUploadIntent
+      summary: Criar intenção para enviar uma fotografia
+      x-memora-contract-id: MEM-001-API-01
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, contentType, sizeBytes]
+              properties:
+                fileName: { type: string, minLength: 1, maxLength: 255 }
+                contentType: { type: string, enum: [image/jpeg, image/png] }
+                sizeBytes: { type: integer, minimum: 1, maximum: 20971520 }
+      responses:
+        '201':
+          description: Intenção criada; URL de upload expira em cinco minutos.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [uploadId, method, uploadUrl, requiredHeaders, expiresAt]
+                properties:
+                  uploadId: { type: string, format: uuid }
+                  method: { type: string, const: PUT }
+                  uploadUrl: { type: string, format: uri }
+                  requiredHeaders: { type: object, additionalProperties: { type: string } }
+                  expiresAt: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
+  /uploads/{uploadId}/complete:
+    post:
+      operationId: completeUpload
+      summary: Validar bytes armazenados e concluir upload
+      x-memora-contract-id: MEM-001-API-03
+      parameters:
+        - { in: path, name: uploadId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Fotografia pronta e URL temporária de visualização.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Photo' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /photos:
+    get:
+      operationId: listReadyPhotos
+      summary: Listar fotografias READY do proprietário atual
+      x-memora-contract-id: MEM-001-API-04
+      responses:
+        '200':
+          description: Lista privada do proprietário atual.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Photo' }
+  /photos/{photoId}:
+    delete:
+      operationId: deletePhoto
+      summary: Excluir uma fotografia do proprietário atual
+      x-memora-contract-id: MEM-001-API-05
+      parameters:
+        - { in: path, name: photoId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Fotografia excluída. }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+components:
+  schemas:
+    Photo:
+      type: object
+      required: [id, status, contentType, sizeBytes, previewUrl, previewExpiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, const: READY }
+        contentType: { type: string, enum: [image/jpeg, image/png] }
+        sizeBytes: { type: integer, minimum: 1, maximum: 20971520 }
+        previewUrl: { type: string, format: uri }
+        previewExpiresAt: { type: string, format: date-time }
+    Problem:
+      type: object
+      required: [type, title, status, detail, code, traceId]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        traceId: { type: string, format: uuid }
+  responses:
+    Problem:
+      description: Erro em formato Problem Details com código estável.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }

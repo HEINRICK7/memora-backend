@@ -1,0 +1,148 @@
+openapi: 3.1.0
+info:
+  title: Memora Mural Draft API
+  version: 1.0.0
+  description: Contrato versionado para criação e consulta de murais (MEM-002).
+servers:
+  - url: /api/v1
+paths:
+  /murals:
+    post:
+      operationId: createMuralDraft
+      summary: Criar rascunho do owner atual
+      x-memora-contract-id: MEM-002-API-01
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  x-counting: Unicode code points after Unicode White_Space trim
+                description:
+                  type: [string, 'null']
+                  maxLength: 500
+                  x-counting: Unicode code points after Unicode White_Space trim
+      responses:
+        '201':
+          description: Rascunho criado ou resposta idempotente repetida.
+          headers:
+            Cache-Control: { schema: { type: string, const: 'private, no-store' } }
+            Idempotency-Replayed: { schema: { type: string, enum: ['true', 'false'] } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MuralSummary' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+    get:
+      operationId: listOwnedMurals
+      summary: Listar murais do owner atual
+      x-memora-contract-id: MEM-002-API-02
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/MuralStatus' }
+        - in: query
+          name: cursor
+          description: Cursor emitido pela página anterior e vinculado ao filtro status.
+          schema: { type: string, maxLength: 128 }
+      responses:
+        '200':
+          description: Página privada de murais do owner atual.
+          headers:
+            Cache-Control: { schema: { type: string, const: 'private, no-store' } }
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/MuralSummary' }
+                  nextCursor: { type: [string, 'null'], maxLength: 128 }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /murals/{muralId}:
+    get:
+      operationId: getOwnedMural
+      summary: Obter um mural próprio
+      x-memora-contract-id: MEM-002-API-03
+      parameters:
+        - in: path
+          name: muralId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Mural privado do owner.
+          headers:
+            Cache-Control: { schema: { type: string, const: 'private, no-store' } }
+            ETag: { schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MuralSummary' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+components:
+  schemas:
+    MuralStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, ARCHIVED]
+    MuralSummary:
+      type: object
+      additionalProperties: false
+      required: [id, status, version, title, description, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/MuralStatus' }
+        version: { type: integer, minimum: 1 }
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+          x-counting: Unicode code points
+        description:
+          type: [string, 'null']
+          maxLength: 500
+          x-counting: Unicode code points
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Problem:
+      type: object
+      required: [type, title, status, detail, code, traceId]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        field: { type: string, enum: [title, description] }
+        traceId: { type: string, format: uuid }
+  responses:
+    Problem:
+      description: Problem Details sem dados de owner ou texto original.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
