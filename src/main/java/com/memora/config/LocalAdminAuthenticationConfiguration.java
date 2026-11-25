@@ -8,7 +8,6 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -36,16 +35,16 @@ public class LocalAdminAuthenticationConfiguration {
         }
 
         String adminEmail = normalizeEmail(configuredEmail);
-        UserDetails admin = User.withUsername(adminEmail)
-                .password(passwordEncoder.encode(configuredPassword))
-                .roles("ADMIN")
-                .build();
+        String encodedPassword = passwordEncoder.encode(configuredPassword);
 
         return submittedEmail -> {
             if (!adminEmail.equals(normalizeEmail(submittedEmail))) {
                 throw new UsernameNotFoundException("Credenciais inválidas.");
             }
-            return admin;
+            return User.withUsername(adminEmail)
+                    .password(encodedPassword)
+                    .roles("ADMIN")
+                    .build();
         };
     }
 
