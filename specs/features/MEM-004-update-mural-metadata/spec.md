@@ -15,10 +15,10 @@ O proprietário pode corrigir o nome e a descrição de um mural enquanto prepar
 
 ## Requisitos rastreáveis
 
-- **MEM-004-R01:** permitir PATCH de `title`, `description` ou ambos; ao menos um campo deve estar presente e campos desconhecidos são recusados.
+- **MEM-004-R01:** permitir PATCH de `title`, `description` ou ambos; ao menos um campo deve estar presente e campos desconhecidos são recusados. O adendo MEM-004-R15 acrescenta `coverPhotoId` ao mesmo PATCH.
 - **MEM-004-R02:** campo omitido não muda; `description: null` limpa a descrição; `title: null` é inválido.
 - **MEM-004-R03:** aplicar o mesmo trim Unicode e limites do MEM-002: título com 1–100 code points, descrição até 500; descrição vazia após trim vira `null`.
-- **MEM-004-R04:** somente mural `DRAFT` pode ser atualizado nesta feature; não modificar status nem capa.
+- **MEM-004-R04:** somente mural `DRAFT` pode ser atualizado nesta feature; não modificar status. A capa segue MEM-004-R15.
 - **MEM-004-R05:** autorização deriva do principal. Mural ausente e mural alheio produzem o mesmo `404`.
 - **MEM-004-R06:** `If-Match` obrigatório e igual ao ETag forte recebido em `GET /murals/{muralId}`; seu valor contém a versão pública decimal entre aspas, por exemplo `"3"`. ETag malformado retorna `400`; ausente retorna `428`.
 - **MEM-004-R07:** versão divergente, mudança concorrente detectada no commit, ou estado diferente de `DRAFT` resulta em `409` sem conteúdo privado no erro.
@@ -29,6 +29,7 @@ O proprietário pode corrigir o nome e a descrição de um mural enquanto prepar
 - **MEM-004-R12:** persistência e concorrência são verificadas em PostgreSQL real e no Compose.
 - **MEM-004-R13:** `GET /murals/{muralId}` retorna ETag forte correspondente ao `version` da representação; a lista não emite ETag individual por item.
 - **MEM-004-R14:** CORS dos origins já permitidos aceita `PATCH` e header `If-Match`, e expõe `ETag` ao navegador; origins não permitidos continuam sem acesso.
+- **MEM-004-R15 (adendo MEM-008):** PATCH aceita `coverPhotoId` opcional; omitido preserva, `null` limpa manualmente, UUID seleciona somente foto READY associada ao mesmo mural e owner. Mudança efetiva usa o mesmo ETag/version e atualiza `MuralSummary`.
 
 ## Estados e erros
 
@@ -36,7 +37,8 @@ O proprietário pode corrigir o nome e a descrição de um mural enquanto prepar
 - Corpo inválido, campos desconhecidos ou UUID malformado: `400`.
 - ETag malformado: `400`, `code: invalid_if_match`.
 - `If-Match` ausente: `428` com `precondition_required`.
-- Mural inexistente ou de outro owner: mesmo `404`.
+- Mural inexistente/alheio ou foto inexistente/alheia/não associada: mesmo `404 resource_not_found`.
+- Foto associada própria mas não READY: `409 photo_not_ready`.
 - Versão obsoleta ou mural não editável: `409`, códigos `stale_mural_version` ou `mural_not_editable`.
 - Falha de persistência: `503` seguro.
 
@@ -46,7 +48,7 @@ O endpoint não recebe `ownerId`, não retorna identidade interna e não inclui 
 
 ## Fora de escopo
 
-Alterar capa, anexar/reordenar fotos, salvar composição, publicar/arquivar, autenticação de navegador e interface de edição.
+Anexar/reordenar fotos, salvar composição, publicar/arquivar, autenticação de navegador e interface de edição. A edição manual de capa é coberta pelo adendo MEM-004-R15.
 
 ## Critérios observáveis
 
@@ -56,3 +58,4 @@ Alterar capa, anexar/reordenar fotos, salvar composição, publicar/arquivar, au
 4. Dono concorrente com uma versão obsoleta recebe conflito; dados da atualização anterior permanecem íntegros.
 5. Outro owner e UUID inexistente são indistinguíveis.
 6. PUBLISHED/ARCHIVED não mudam nesta feature.
+7. O adendo MEM-004-R15 permite selecionar/limpar capa em DRAFT com If-Match; foto precisa estar READY e associada ao mesmo mural.

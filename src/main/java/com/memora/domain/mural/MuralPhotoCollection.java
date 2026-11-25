@@ -9,6 +9,8 @@ import java.util.UUID;
 
 /** Ordered, immutable set of photo links belonging to one mural. */
 public final class MuralPhotoCollection {
+    public static final int DEFAULT_MAX_PHOTOS = 300;
+
     private final UUID muralId;
     private final List<MuralPhoto> photos;
 
@@ -34,9 +36,16 @@ public final class MuralPhotoCollection {
     }
 
     public MuralPhotoCollection append(UUID photoId) {
+        return append(photoId, DEFAULT_MAX_PHOTOS);
+    }
+
+    public MuralPhotoCollection append(UUID photoId, int maxPhotos) {
         Objects.requireNonNull(photoId, "photoId");
         if (photos.stream().anyMatch(photo -> photo.photoId().equals(photoId))) {
             return this;
+        }
+        if (maxPhotos > 0 && photos.size() >= maxPhotos) {
+            throw new MuralPhotoLimitExceededException(maxPhotos);
         }
         List<MuralPhoto> appended = new ArrayList<>(photos);
         appended.add(new MuralPhoto(muralId, photoId, photos.size()));

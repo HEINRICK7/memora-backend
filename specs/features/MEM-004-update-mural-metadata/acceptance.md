@@ -105,3 +105,24 @@ Em todos os cenários de PATCH abaixo, o cliente envia o ETag atual em `If-Match
 **When** o navegador consulta ou atualiza um mural  
 **Then** CORS permite o método/header e expõe `ETag` ao cliente  
 **And** um origin fora da allowlist não recebe permissão CORS.
+
+## MEM-004-AC17 — Selecionar capa por PATCH (adendo MEM-008)
+
+**Given** mural próprio DRAFT com foto READY associada e ETag atual\
+**When** PATCH envia `coverPhotoId` com o UUID da foto\
+**Then** resposta `200` inclui a capa, avança versão/ETag uma vez e persiste após reinício Compose\
+**And** a foto continua vinculada e o restante do resumo não muda.
+
+## MEM-004-AC18 — Limpar capa manualmente
+
+**Given** mural próprio DRAFT com capa definida e ETag atual\
+**When** PATCH envia `coverPhotoId: null`\
+**Then** resposta contém `coverPhotoId: null`\
+**And** não escolhe outra foto automaticamente; versão avança uma vez.
+
+## MEM-004-AC19 — Recusar capa não associada ou não READY
+
+**Given** UUID de foto inexistente/alheia/não associada ou foto associada em estado diferente de READY\
+**When** PATCH tenta selecionar essa capa\
+**Then** retorna `404 resource_not_found` para identidade/acesso indistinguíveis ou `409 photo_not_ready` para ativo próprio associado\
+**And** capa, versão e timestamp permanecem intactos.

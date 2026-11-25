@@ -6,6 +6,7 @@ import com.memora.application.mural.MuralPhotoSnapshot;
 import com.memora.application.mural.MuralStaleVersionException;
 import com.memora.application.ports.MuralPhotoRepository;
 import com.memora.application.mural.PhotoNotReadyException;
+import com.memora.config.PhotoLimitsProperties;
 import com.memora.domain.mural.InvalidMuralPhotoOrderException;
 import com.memora.domain.mural.Mural;
 import com.memora.domain.mural.MuralNotEditableException;
@@ -30,13 +31,16 @@ class JpaMuralPhotoRepository implements MuralPhotoRepository {
     private final SpringDataMuralPhotoRepository links;
     private final SpringDataPhotoAssetRepository photos;
     private final EntityManager entityManager;
+    private final int maxPhotosPerMural;
 
     JpaMuralPhotoRepository(SpringDataMuralRepository murals, SpringDataMuralPhotoRepository links,
-                            SpringDataPhotoAssetRepository photos, EntityManager entityManager) {
+                            SpringDataPhotoAssetRepository photos, EntityManager entityManager,
+                            PhotoLimitsProperties limits) {
         this.murals = murals;
         this.links = links;
         this.photos = photos;
         this.entityManager = entityManager;
+        this.maxPhotosPerMural = limits.effectiveMaxPhotosPerMural();
     }
 
     @Override
@@ -60,7 +64,7 @@ class JpaMuralPhotoRepository implements MuralPhotoRepository {
 
         List<MuralPhotoEntity> existingLinks = links.findByMuralIdOrderByPositionAsc(muralId);
         MuralPhotoCollection collection = restore(muralId, existingLinks);
-        MuralPhotoCollection updated = collection.append(photoId);
+        MuralPhotoCollection updated = collection.append(photoId, maxPhotosPerMural);
         boolean created = updated != collection;
         if (created) {
             MuralPhoto added = updated.photos().get(updated.photos().size() - 1);

@@ -131,3 +131,10 @@
 **Then** todas as resoluções retornam o mesmo `UserId` UUID persistido  
 **And** issuer e subject iguais formam um usuário, enquanto issuers diferentes permanecem identidades distintas  
 **And** nenhum owner informado pelo cliente participa da resolução.
+
+## MEM-002-AC19 — Retornar campos futuros de capa e publicação no summary
+
+**Given** um mural `DRAFT` criado antes da publicação explícita\
+**When** o owner cria, lista ou consulta o mural\
+**Then** cada `MuralSummary` inclui `coverPhotoId: null` e `publishedAt: null`\
+**And** nenhum dos campos é omitido, e a versão/timestamps existentes não mudam.

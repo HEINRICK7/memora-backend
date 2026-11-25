@@ -14,11 +14,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public final class ListMuralPhotos {
-    private static final Duration PREVIEW_TTL = Duration.ofMinutes(5);
+    private static final Duration PREVIEW_TTL = Duration.ofMinutes(15);
 
     private final MuralPhotoRepository murals;
     private final PhotoAssetRepository photos;
@@ -38,18 +41,37 @@ public final class ListMuralPhotos {
     public MuralPhotoViewCollection execute(UUID muralId) {
         UUID ownerId = currentUser.get();
         MuralPhotoSnapshot snapshot = murals.findOwned(ownerId, muralId);
-        List<MuralPhotoView> views = new ArrayList<>(snapshot.photos().size());
-        for (MuralPhoto link : snapshot.photos()) {
-            PhotoAsset asset = photos.findByIdAndOwner(link.photoId(), ownerId.toString())
-                    .orElseThrow(PhotoNotFoundException::new);
-            if (asset.status() != PhotoStatus.READY) {
+        List<MuralPhoto> links = snapshot.photos();
+        if (links.isEmpty()) {
+            return new MuralPhotoViewCollection(snapshot.mural().version(), List.of());
+        }
+
+        List<UUID> photoIds = links.stream().map(MuralPhoto::photoId).toList();
+        Map<UUID, PhotoAsset> assetsById = photos.findReadyByIdsAndOwner(photoIds, ownerId.toString()).stream()
+                .collect(Collectors.toMap(PhotoAsset::id, Function.identity(), (left, right) -> left));
+
+        List<MuralPhotoView> views = new ArrayList<>(links.size());
+        Instant expiresAt = clock.instant().plus(PREVIEW_TTL);
+        for (MuralPhoto link : links) {
+            PhotoAsset asset = assetsById.get(link.photoId());
+            if (asset == null || asset.status() != PhotoStatus.READY) {
                 throw new PhotoNotFoundException();
             }
-            Instant expiresAt = clock.instant().plus(PREVIEW_TTL);
-            String previewUrl = storage.presignGet(asset.storageKey(), PREVIEW_TTL);
-            views.add(new MuralPhotoView(asset.id(), link.position(), asset.contentType(), asset.sizeBytes(),
-                    previewUrl, expiresAt));
+            String previewKey = asset.bestPreviewKey();
+            String thumbKey = asset.bestThumbnailKey();
+            String previewUrl = storage.presignGet(previewKey, PREVIEW_TTL, cachePolicyFor(previewKey));
+            String thumbnailUrl = previewKey.equals(thumbKey)
+                    ? previewUrl
+                    : storage.presignGet(thumbKey, PREVIEW_TTL, cachePolicyFor(thumbKey));
+            views.add(new MuralPhotoView(
+                    asset.id(), link.position(), asset.contentType(), asset.sizeBytes(),
+                    previewUrl, thumbnailUrl, expiresAt
+            ));
         }
         return new MuralPhotoViewCollection(snapshot.mural().version(), views);
+    }
+
+    private static String cachePolicyFor(String key) {
+        return key.startsWith("derived/") ? PhotoStorage.PRIVATE_DERIVED_CACHE : PhotoStorage.PRIVATE_NO_STORE;
     }
 }

@@ -26,7 +26,7 @@ Imagens de base devem usar tags fixas, nunca latest. A versão do MinIO deve ser
 
 ## MEM-001-ADR-07 — Segurança de mídia
 
-Apenas objetos privados são entregues. O fluxo não publica mural nem URL pública permanente. Derivados com remoção de EXIF pertencem a uma feature futura antes de qualquer fotografia ser exibida por link compartilhado.
+Apenas objetos privados são entregues; a publicação e link VIEW são definidos em MEM-008. Este ADR foi supersedido por MEM-001-ADR-12: qualquer mídia compartilhada usa derivado sanitizado SHARE_VIEW e nunca o original.
 
 ## MEM-001-ADR-08 — Build local do MinIO OSS
 
@@ -43,3 +43,19 @@ A release OSS fixada responde `501 NotImplemented` a `PutBucketCors`; CORS por b
 **Decisão:** `DELETE /photos/{photoId}` não desassocia implicitamente o ativo. Enquanto houver vínculo `MuralPhoto`, responde `409 photo_attached`; a limpeza exige remoção explícita dos vínculos por MEM-006.\
 **Concorrência:** associação e exclusão serializam na mesma linha de `PhotoAsset` dentro do PostgreSQL. A exclusão verifica ausência de vínculos e transiciona READY→DELETED antes de solicitar remoção ao MinIO.\
 **Recuperação:** como DB e MinIO não compartilham transação, falha na remoção mantém o objeto privado e a limpeza é repetível; o ativo DELETED não pode ser associado ou assinado para leitura. Essa decisão impede vínculo órfão e evita apagar conteúdo de outro mural.
+
+## MEM-001-ADR-11 — Impedir cache da resposta de leitura MinIO
+
+**Decisão proposta:** toda URL pré-assinada GET emitida pelo `PhotoStorage` força `Cache-Control: private, no-store` na resposta direta do objeto MinIO por meio do override S3 `response-cache-control`; preservar o TTL de leitura existente de cinco minutos.
+
+**Motivo:** o header `Cache-Control` da API JSON não governa a resposta subsequente do GET direto ao MinIO. URLs assinadas são credenciais bearer e seus bytes não devem ser reutilizáveis por caches após a janela de acesso.
+
+**Consequência:** o adaptador `S3PhotoStorage` deve configurar o override no `GetObjectRequest` antes de assinar; não editar a query depois de assinar. MEM-001-AC11 exige prova Compose lendo a URL emitida e observando o header real do MinIO. A prova ainda está pendente; as URLs PUT de upload não mudam.
+
+## MEM-001-ADR-12 — Preservar original e derivar mídia sanitizada para compartilhamento
+
+**Decisão proposta:** manter o objeto enviado byte a byte em `originals/private/` e gerar uma variante interna `SHARE_VIEW` em `derived/private/share-view/v1/`. A transformação aplica orientação EXIF aos pixels e remove GPS, EXIF e XMP, sem modificar o original. SHARE_VIEW limita o maior lado a 2560 px sem upscaling, preserva aspecto/perfil de cor, e usa decode/subsampling bounded para evitar alocação full-resolution; qualidade visual é verificada com fixtures reais. 2560 px é limite de preview compartilhável, não do original.
+
+**Motivo:** links VIEW não podem expor a cópia original que pode conter localização ou metadados. O original é conteúdo de propriedade do usuário e não deve ser substituído por reencode.
+
+**Consequência:** `PhotoAsset` registra estado/key/metadata/version da variante; `CompletePhotoUpload` gera idempotentemente antes de confirmar READY e `DeletePhoto` limpa ambos os objetos. Migration V4 marca READY legado `PENDING`; `PublishMural` garante as variantes pendentes idempotentemente antes da transação de publicação. Falha deixa DRAFT, sem grant e sem URL, preservando original e permitindo retry; GET compartilhado nunca faz fallback ao original. O original continua privado e consultável pelo owner. Política de retenção/backups de produção permanece ADR pendente.

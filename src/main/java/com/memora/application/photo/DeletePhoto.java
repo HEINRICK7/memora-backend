@@ -29,5 +29,19 @@ public final class DeletePhoto {
     public void execute(UUID photoId) {
         PhotoAsset deleted = repository.deleteIfUnattached(photoId, currentOwner.ownerId(), clock.instant());
         storage.delete(deleted.storageKey());
+        if (deleted.shareViewStorageKey() != null && !deleted.shareViewStorageKey().isBlank()) {
+            try {
+                storage.delete(deleted.shareViewStorageKey());
+            } catch (RuntimeException ignored) {
+                // Best-effort derivative cleanup.
+            }
+        }
+        if (deleted.thumbnailStorageKey() != null && !deleted.thumbnailStorageKey().isBlank()) {
+            try {
+                storage.delete(deleted.thumbnailStorageKey());
+            } catch (RuntimeException ignored) {
+                // Best-effort derivative cleanup.
+            }
+        }
     }
 }

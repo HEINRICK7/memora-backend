@@ -1,0 +1,7 @@
+# MEM-011 — Decisões Técnicas
+
+1. **Processamento em disco temporário vs. RAM:** `Files.createTempFile` com limpeza em `finally` evita manter streams de até 20 MiB no heap Java durante leitura `ImageIO` e leitura EXIF com `metadata-extractor`.
+2. **Semáforo in-process vs. fila externa:** Conforme `BACKEND_SPEC.md` ("fila apenas com necessidade demonstrada"), um `Semaphore` configurável no backend + transações JDBC curtas eliminam o esgotamento de heap e conexões sem introduzir Redis/RabbitMQ/Kafka prematuramente.
+3. **WebP e HEIC sem binários JNI no backend:** OpenJDK não inclui codec WebP/HEIC nativo no `ImageIO`. O frontend normaliza WebP e HEIC (quando decodificáveis pelo navegador, ex. Safari iOS para HEIC e todos os navegadores modernos para WebP) para JPEG/PNG antes do `PUT`, garantindo compatibilidade universal sem dependências nativas frágeis no container Java.
+4. **Cache privado nos derivados imutáveis:** Objetos em `derived/private/{share-view,thumb}/v1/...` são versionados e imutáveis; usar `Cache-Control: private, max-age=600` permite cache local no navegador do usuário durante a sessão sem jamais liberar cache em proxies compartilhados (`public`). As respostas JSON da API continuam com `Cache-Control: private, no-store`.
+5. **Compatibilidade de contratos:** Todos os campos novos (`thumbnailUrl`, `nextCursor`, `totalPhotos`, `nextOffset`) são aditivos, mantendo 100% de compatibilidade com consumidores e testes existentes.

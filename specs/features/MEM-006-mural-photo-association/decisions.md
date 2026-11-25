@@ -1,4 +1,4 @@
-# MEM-006 — Decisões aprovadas
+# MEM-006 — Decisões aprovadas e adendo proposto
 
 ## MEM-006-ADR-01 — Usar a versão do mural para concorrência da coleção
 
@@ -35,8 +35,24 @@
 **Motivo:** swaps válidos podem ter colisão temporária durante atualizações por linha, embora o conjunto final seja único. Validar somente no commit permite reordenação atômica e ainda impede duplicatas persistidas.\
 **Verificação:** a integração real MEM-006 deve trocar posições existentes e confirmar leitura final ordenada e unicidade; não substituir PostgreSQL por H2 ou mock.
 
+## MEM-006-ADR-07 — Aplicar no-store na resposta direta de mídia MinIO
+
+**Decisão proposta:** toda chamada de leitura assinada por `PhotoStorage.presignGet` inclui `response-cache-control=private, no-store` na assinatura S3 e o GET de objeto servido pelo MinIO retorna esse header. Preservar TTL privado vigente de cinco minutos.
+
+**Motivo:** `Cache-Control` da API que devolve `previewUrl` não controla bytes respondidos pelo endpoint MinIO.
+
+**Consequência:** adaptar `S3PhotoStorage` no nível de `GetObjectRequest`; upload PUT e TTLs não mudam. MEM-006-AC20 precisa provar o header no Compose contra MinIO real antes de MEM-008 iniciar RED/GREEN. A evidência de integração atual não verificou esse header, então a prova permanece pendente.
+
 ## Restrições de implementação aprovadas
 
 - MEM-001 e MEM-006 foram aprovados conjuntamente; preservar as regras de exclusão/concorrência em implementação.
 - Quota/limite por mural permanece pendente para exposição pública; não inventar valor nesta feature.
 - Adicionar o OpenAPI versionado MEM-006 antes dos testes de contrato HTTP e manter handlers alinhados a ele.
+
+## MEM-006-ADR-08 — Capa inicial e fallback dentro da mutação de vínculo
+
+**Decisão proposta:** primeira associação READY a uma coleção vazia define `Mural.coverPhotoId`; remover a foto de capa em DRAFT escolhe a primeira READY restante por posição ou null. Alteração de vínculo, capa, posições e versão ocorre na mesma transação PostgreSQL. Remover foto que não é capa mantém a referência.
+
+**Motivo:** a UI precisa de uma capa persistente para resumo/compartilhamento e a FK composta impede referência órfã. A regra null manual de MEM-004 PATCH continua distinta da seleção/fallback causado por attach/detach.
+
+**Consequência:** MEM-006-AC21/22 exige PostgreSQL real e E2E Compose; OpenAPI MEM-006 documenta os efeitos de `POST`/`DELETE` e MuralSummary expõe a referência. A evidência está pendente até execução RED/GREEN após aprovação do SDD MEM-008.

@@ -141,3 +141,26 @@
 **When** o navegador envia preflight `OPTIONS` para a rota de reordenação com método `PUT` e header `If-Match`\
 **Then** a resposta permite `PUT`, `If-Match` e `Content-Type` e expõe `ETag` nas respostas da API\
 **And** um origin não configurado não recebe `Access-Control-Allow-Origin`.
+
+## MEM-006-AC20 — Aplicar no-store no GET MinIO da URL privada (R18)
+
+**Given** um mural próprio com foto READY e `previewUrl` emitida por `GET /api/v1/murals/{muralId}/photos`\
+**When** o teste Compose busca essa URL diretamente no MinIO\
+**Then** a resposta de objeto do MinIO contém `Cache-Control: private, no-store`\
+**And** o prazo assinado preserva o limite vigente de cinco minutos\
+**And** o teste não considera suficiente o header no-store do JSON da API.
+
+## MEM-006-AC21 — Primeira associação define capa inicial (R19)
+
+**Given** mural DRAFT sem vínculos e `coverPhotoId` nulo\
+**When** owner associa sua primeira foto READY com If-Match atual\
+**Then** a mesma transação cria vínculo na posição zero e define `coverPhotoId` para a foto\
+**And** versão/updatedAt avançam uma vez e `MuralSummary` mostra a capa após leitura Compose.
+
+## MEM-006-AC22 — Remover capa aplica fallback atômico (R20)
+
+**Given** mural DRAFT com capa A e fotos READY A/B/C em posições 0/1/2\
+**When** owner remove vínculo de A usando If-Match atual\
+**Then** a mesma transação aponta `coverPhotoId` para a primeira foto READY restante por posição (B), remove A e compacta B/C\
+**And** versão/updatedAt avançam uma vez; remover foto que não é capa mantém `coverPhotoId`\
+**And** um segundo caso com coleção contendo somente A termina com capa null; PostgreSQL real comprova FK e atomicidade.

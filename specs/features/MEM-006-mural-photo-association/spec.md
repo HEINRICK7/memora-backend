@@ -1,6 +1,6 @@
 # MEM-006 — Associar fotografias a um mural
 
-**Estado:** aprovado pelo juiz para implementação incremental.\
+**Estado:** base aprovada pelo juiz para implementação incremental; adendos MEM-006-R18–R20/AC20–AC22 propostos e pendentes da evidência Compose do header MinIO e dos testes de capa.\
 **Escopo:** associar fotografias `READY` do proprietário a um mural em rascunho, consultar os vínculos em ordem, reordená-los e remover um vínculo sem apagar o ativo.\
 **Fontes:** `BACKEND_SPEC.md` (casos de uso 6 e API de fotos), `../memora-frontend/FRONTEND_SPEC.md`, `../memora-frontend/BRAND_SYSTEM.md`, `../SDD_TDD_PROTOCOL.md`.
 
@@ -34,12 +34,15 @@ Depois de criar um rascunho de mural e guardar fotografias no storage privado, o
 - **MEM-006-R15:** associação e exclusão de um mesmo `PhotoAsset` serializam pela linha do ativo e verificam estado/vínculos dentro da fronteira transacional; corrida nunca deixa vínculo para ativo `DELETED`, FK inconsistente ou objeto removido de ativo ainda vinculado.
 - **MEM-006-R16:** reordenação grava todas as posições numa única transação PostgreSQL; a constraint de posição é validada no commit e rejeita qualquer estado final duplicado.
 - **MEM-006-R17:** CORS permite `PUT` e `If-Match` para reordenar nos origins já configurados, sem ampliar a lista de origins; respostas continuam expondo `ETag` somente a esses origins.
+- **MEM-006-R18:** `GET /murals/{muralId}/photos` usa URL GET assinada cujo objeto MinIO responde `Cache-Control: private, no-store`. TTL privado vigente permanece em cinco minutos; o Compose deve testar o header no GET real do objeto.
+- **MEM-006-R19 (adendo MEM-008):** ao associar a primeira foto READY a uma coleção sem vínculos e sem capa, a transação seleciona essa foto como `coverPhotoId` inicial.
+- **MEM-006-R20 (adendo MEM-008):** ao remover a foto selecionada como capa em DRAFT, a transação escolhe a primeira foto READY restante por posição ou null, remove vínculo e compacta posições; versão e timestamp avançam uma vez no mesmo commit. Remover outra foto mantém a capa.
 
 ## Estados e invariantes
 
 - Ativo associado: `PhotoAsset.READY` → `MuralPhoto(muralId, photoId, position)`; o status do ativo permanece `READY`.
 - Posições de cada mural formam exatamente `0..n-1`. Anexar acrescenta em `n`; remover compacta as posições; ordenar substitui todas as posições numa transação.
-- `MuralPhoto` é uma relação ordenada, não um arquivo novo, cópia, capa ou Composition.
+- `MuralPhoto` é uma relação ordenada, não um arquivo novo, cópia ou Composition. A capa é uma referência de `Mural` à foto associada; primeira associação seleciona capa inicial e detach aplica fallback MEM-006-R20.
 - Uma foto pode ser reutilizada em murais diferentes do mesmo proprietário. Nunca é associada a mural de outro proprietário.
 - Todos os endpoints deste feature são privados; o contrato não cria visualização pública nem acesso por link.
 
@@ -65,7 +68,7 @@ Depois de criar um rascunho de mural e guardar fotografias no storage privado, o
 
 ## Fora de escopo
 
-Salvar `Composition`, escolher capa, upload/confirmar foto, publicação/arquivamento, links compartilhados, contribuição/moderação, exclusão definitiva/retention policy, conversão/derivados, paginação da coleção, limite/quota de fotos por mural e autenticação de produção.
+Salvar `Composition`, upload/confirmar foto, publicação/arquivamento, links compartilhados, contribuição/moderação, exclusão definitiva/retention policy, derivados sanitizados, paginação da coleção, limite/quota de fotos por mural e autenticação de produção. A referência de capa automática está limitada aos adendos MEM-006-R19/R20 e MEM-008.
 
 ## Dependências
 
@@ -83,6 +86,8 @@ Salvar `Composition`, escolher capa, upload/confirmar foto, publicação/arquiva
 5. Alteração efetiva atualiza ETag/versão uma vez; versão obsoleta e corrida concorrente respondem conflito e preservam estado consistente.
 6. Upload `UPLOADING`, `FAILED` ou `DELETED`, foto de outro owner, mural de outro owner e status incompatível seguem os erros especificados sem vazamento.
 7. Excluir ativo ainda associado não remove bytes nem metadados; depois da remoção de todos os vínculos a exclusão permanece disponível pelo endpoint de fotos existente.
+8. O GET direto ao objeto através de `previewUrl` retorna `Cache-Control: private, no-store` no MinIO, preservando TTL de cinco minutos.
+9. Primeira associação escolhe a capa no mesmo commit; ao remover a capa, primeira foto READY restante por posição vira capa ou null. Testar attach/detach em PostgreSQL real e E2E Compose, com versão incrementada uma vez.
 
 ## Limites e decisões futuras
 

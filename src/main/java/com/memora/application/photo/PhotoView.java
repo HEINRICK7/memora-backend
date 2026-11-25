@@ -11,6 +11,17 @@ public record PhotoView(
         String contentType,
         long sizeBytes,
         String previewUrl,
+        String thumbnailUrl,
         Instant previewExpiresAt
 ) {
+    public PhotoView(
+            UUID id,
+            PhotoStatus status,
+            String contentType,
+            long sizeBytes,
+            String previewUrl,
+            Instant previewExpiresAt
+    ) {
+        this(id, status, contentType, sizeBytes, previewUrl, previewUrl, previewExpiresAt);
+    }
 }

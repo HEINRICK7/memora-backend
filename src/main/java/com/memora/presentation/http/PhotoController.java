@@ -3,10 +3,13 @@ package com.memora.presentation.http;
 import com.memora.application.photo.CompletePhotoUpload;
 import com.memora.application.photo.DeletePhoto;
 import com.memora.application.photo.ListPhotos;
+import com.memora.application.photo.PhotoPage;
 import com.memora.application.photo.PhotoView;
 import com.memora.application.photo.PreparePhotoUpload;
 import com.memora.application.photo.PreparePhotoUploadCommand;
 import com.memora.application.photo.UploadIntentResult;
+import com.memora.application.ports.CurrentOwner;
+import com.memora.config.PhotoLimitsProperties;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -34,17 +38,25 @@ public class PhotoController {
     private final CompletePhotoUpload completeUpload;
     private final ListPhotos listPhotos;
     private final DeletePhoto deletePhoto;
+    private final CurrentOwner currentOwner;
+    private final UploadRateLimiter rateLimiter;
+    private final int ownerUploadsPerMinute;
 
     public PhotoController(PreparePhotoUpload prepareUpload, CompletePhotoUpload completeUpload,
-                           ListPhotos listPhotos, DeletePhoto deletePhoto) {
+                           ListPhotos listPhotos, DeletePhoto deletePhoto, CurrentOwner currentOwner,
+                           UploadRateLimiter rateLimiter, PhotoLimitsProperties limits) {
         this.prepareUpload = prepareUpload;
         this.completeUpload = completeUpload;
         this.listPhotos = listPhotos;
         this.deletePhoto = deletePhoto;
+        this.currentOwner = currentOwner;
+        this.rateLimiter = rateLimiter;
+        this.ownerUploadsPerMinute = limits.effectiveOwnerUploadsPerMinute();
     }
 
     @PostMapping("/uploads")
     public ResponseEntity<UploadIntentResult> prepare(@Valid @RequestBody CreateUploadRequest request) {
+        rateLimiter.checkOrThrow("owner-upload:" + currentOwner.ownerId(), ownerUploadsPerMinute);
         UploadIntentResult result = prepareUpload.execute(new PreparePhotoUploadCommand(
                 request.fileName(), request.contentType(), request.sizeBytes()));
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -58,9 +70,13 @@ public class PhotoController {
     }
 
     @GetMapping("/photos")
-    public ResponseEntity<PhotoListResponse> list() {
+    public ResponseEntity<PhotoListResponse> list(
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String cursor
+    ) {
+        PhotoPage page = listPhotos.execute(limit, cursor);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(new PhotoListResponse(listPhotos.execute()));
+                .body(new PhotoListResponse(page.items(), page.nextCursor()));
     }
 
     @DeleteMapping("/photos/{photoId}")
@@ -76,6 +92,6 @@ public class PhotoController {
     ) {
     }
 
-    public record PhotoListResponse(List<PhotoView> items) {
+    public record PhotoListResponse(List<PhotoView> items, String nextCursor) {
     }
 }

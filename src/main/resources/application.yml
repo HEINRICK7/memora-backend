@@ -34,6 +34,7 @@ management:
         readiness:
           include: readinessState,db,minio
 memora:
+  public-base-url: ${MEMORA_PUBLIC_BASE_URL:http://localhost:3000}
   storage:
     internal-endpoint: ${MINIO_ENDPOINT_INTERNAL:http://localhost:9000}
     public-endpoint: ${MINIO_ENDPOINT_PUBLIC:http://localhost:9000}
@@ -42,6 +43,15 @@ memora:
     secret-key: ${MINIO_SECRET_KEY:memora-local-only-change-me}
     region: ${MINIO_REGION:us-east-1}
     max-upload-bytes: ${MEMORA_UPLOAD_MAX_BYTES:20971520}
+    max-concurrent-processing: ${MEMORA_IMAGE_MAX_CONCURRENT_PROCESSING:4}
+    orphan-cleanup-interval-ms: ${MEMORA_ORPHAN_CLEANUP_INTERVAL_MS:900000}
+  limits:
+    max-photos-per-owner: ${MEMORA_MAX_PHOTOS_PER_OWNER:500}
+    max-photos-per-mural: ${MEMORA_MAX_PHOTOS_PER_MURAL:300}
+    max-contributions-per-grant: ${MEMORA_MAX_CONTRIBUTIONS_PER_GRANT:200}
+    owner-uploads-per-minute: ${MEMORA_OWNER_UPLOADS_PER_MINUTE:60}
+    guest-contributions-per-minute: ${MEMORA_GUEST_CONTRIBUTIONS_PER_MINUTE:30}
+    orphan-cleanup-batch-size: ${MEMORA_ORPHAN_CLEANUP_BATCH_SIZE:100}
   api:
     cors:
       allowed-origins: ${MEMORA_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}

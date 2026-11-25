@@ -1,5 +1,6 @@
 package com.memora.infrastructure.persistence;
 
+import com.memora.domain.photo.InspectedImage;
 import com.memora.domain.photo.PhotoAsset;
 import com.memora.domain.photo.PhotoStatus;
 import jakarta.persistence.Column;
@@ -54,6 +55,42 @@ public class PhotoAssetEntity {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @Column(name = "share_view_status", nullable = false, length = 20)
+    private String shareViewStatus = "ABSENT";
+
+    @Column(name = "share_view_storage_key", length = 512)
+    private String shareViewStorageKey;
+
+    @Column(name = "share_view_content_type", length = 100)
+    private String shareViewContentType;
+
+    @Column(name = "share_view_size_bytes")
+    private Long shareViewSizeBytes;
+
+    @Column(name = "share_view_width")
+    private Integer shareViewWidth;
+
+    @Column(name = "share_view_height")
+    private Integer shareViewHeight;
+
+    @Column(name = "share_view_processor_version", length = 100)
+    private String shareViewProcessorVersion;
+
+    @Column(name = "share_view_ready_at")
+    private Instant shareViewReadyAt;
+
+    @Column(name = "thumbnail_storage_key", length = 512)
+    private String thumbnailStorageKey;
+
+    @Column(name = "thumbnail_width")
+    private Integer thumbnailWidth;
+
+    @Column(name = "thumbnail_height")
+    private Integer thumbnailHeight;
+
+    @Column(name = "thumbnail_size_bytes")
+    private Long thumbnailSizeBytes;
+
     @Version
     @Column(nullable = false)
     private long version;
@@ -94,10 +131,30 @@ public class PhotoAssetEntity {
         deletedAt = asset.deletedAt();
     }
 
+    public void updateShareView(String storageKey, InspectedImage image, Instant readyAt) {
+        shareViewStatus = "READY";
+        shareViewStorageKey = storageKey;
+        shareViewContentType = image.contentType();
+        shareViewSizeBytes = image.sizeBytes();
+        shareViewWidth = image.width();
+        shareViewHeight = image.height();
+        shareViewProcessorVersion = "memora-share-view-v2";
+        shareViewReadyAt = readyAt;
+    }
+
+    public void updateThumbnail(String storageKey, InspectedImage image) {
+        thumbnailStorageKey = storageKey;
+        thumbnailWidth = image.width();
+        thumbnailHeight = image.height();
+        thumbnailSizeBytes = image.sizeBytes();
+    }
+
     public PhotoAsset toDomain() {
         return PhotoAsset.restore(
                 id, ownerId.toString(), storageKey, contentType, sizeBytes, status, createdAt,
-                intentExpiresAt, width, height, readyAt, deletedAt
+                intentExpiresAt, width, height, readyAt, deletedAt,
+                "READY".equals(shareViewStatus) ? shareViewStorageKey : null,
+                thumbnailStorageKey
         );
     }
 }

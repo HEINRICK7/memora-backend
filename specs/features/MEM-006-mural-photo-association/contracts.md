@@ -1,8 +1,8 @@
 # MEM-006 — Contratos
 
-**Estado:** aprovado pelo juiz; OpenAPI MEM-006 v1 criado e MEM-001 v1 atualizado junto com o GREEN.\
+**Estado:** base aprovada pelo juiz; adendos MEM-006-R18–R20/AC20–AC22 propostos e pendentes de evidência Compose do header MinIO e dos testes de capa.\
 **Base:** `/api/v1`; rotas privadas usam o `UserId` do principal validado.\
-**Rastreabilidade:** MEM-006-R01–R17, MEM-006-AC01–AC19.
+**Rastreabilidade:** MEM-006-R01–R20, MEM-006-AC01–AC22.
 
 ## MEM-006-API-01 — Listar fotografias do mural
 
@@ -11,7 +11,7 @@
 - Autorização: somente proprietário atual; mural ausente/alheio retorna `404 resource_not_found`.
 - Retorna apenas ativos `READY` associados àquele mural, na posição ascendente.
 - Resposta inclui `muralVersion` e `Cache-Control: private, no-store`. O `ETag` forte continua sendo obtido de `GET /murals/{muralId}`; não emitir ETag forte nesta resposta porque `previewUrl` muda quando o presigner emite uma URL nova.
-- `previewUrl` é acesso temporário assinado criado depois da autorização, expira em até cinco minutos e não é persistido.
+- `previewUrl` é acesso temporário assinado criado depois da autorização, expira em até cinco minutos e não é persistido. O GET direto ao objeto no MinIO responde `Cache-Control: private, no-store` pelo override assinado `response-cache-control=private, no-store`.
 
 Resposta `200`:
 
@@ -52,7 +52,7 @@ Pedido:
 }
 ```
 
-O ativo precisa estar `READY` e pertencer ao mesmo proprietário do mural. Campo `ownerId` ou propriedades desconhecidas não são aceitos. A associação nova é acrescentada ao fim. O mesmo ativo pode aparecer em outro mural do mesmo proprietário, mas não se duplica no mesmo mural.
+O ativo precisa estar `READY` e pertencer ao mesmo proprietário do mural. Campo `ownerId` ou propriedades desconhecidas não são aceitos. A associação nova é acrescentada ao fim. O mesmo ativo pode aparecer em outro mural do mesmo proprietário, mas não se duplica no mesmo mural. Pelo adendo MEM-006-R19, quando for a primeira associação e a capa estiver null, define `coverPhotoId` no mesmo commit; retry de vínculo existente não altera a capa.
 
 - Novo vínculo: `201 Created`, corpo `MuralPhotoLink` (`photoId`, `position`), ETag novo, `Cache-Control: private, no-store`.
 - Vínculo já existente e ETag atual: `200 OK`, corpo `MuralPhotoLink` e ETag atual; não incrementa versão/timestamp.
@@ -92,7 +92,7 @@ Respostas: `200`, `400`, `401`, `404`, `409`, `422`, `428`, `503`.
 Header obrigatório `If-Match: "{muralVersion}"`.
 
 - `204 No Content`, ETag novo e `Cache-Control: private, no-store` quando remove vínculo atual; sem URL de mídia.
-- A operação só remove a associação do mural indicado. Normaliza as posições seguintes; não apaga ativo nem arquivo.
+- A operação só remove a associação do mural indicado. Normaliza as posições seguintes; não apaga ativo nem arquivo. Pelo adendo MEM-006-R20, se a foto removida for a capa de DRAFT, a mesma transação seleciona a primeira foto READY restante por posição ou null e atualiza a versão uma vez.
 - Mural/foto ausente ou alheio retorna `404 resource_not_found`; vínculo inexistente neste mural retorna o mesmo `404`.
 
 Respostas: `204`, `400`, `401`, `404`, `409`, `428`, `503`.
@@ -135,6 +135,12 @@ O schema acima é ilustrativo; cada item respeita `MuralPhotoView`. Somente esta
 
 Usado somente como resultado de `PUT /photos/order`; nunca inclui URL assinada.
 
+## Adaptação do `PhotoStorage`
+
+O contrato de `PhotoStorage.presignGet(storageKey, ttl)` passa a garantir que toda URL de leitura emitida assine o override de resposta `Cache-Control: private, no-store` para o GET do objeto MinIO. O adaptador S3 configura `responseCacheControl("private, no-store")` no `GetObjectRequest` que é encapsulado pelo `GetObjectPresignRequest`; o SDK inclui `response-cache-control` na assinatura. Não concatenar nem alterar parâmetros depois da assinatura. O TTL privado existente de cinco minutos não muda. Compose deve fazer GET real à URL e inspecionar o header de resposta do MinIO; a resposta da API não comprova esse critério.
+
+Essa garantia também cobre URLs já existentes de MEM-001 (completar upload/listar galeria). Uploads assinados com método PUT não recebem o override.
+
 ## Erros Problem Details
 
 | HTTP | `code` | Uso |
@@ -159,3 +165,10 @@ Corpo de erro segue RFC 9457 usado pelo backend, com `traceId`, sem valores envi
 - `mural_photos` possui PK ou unique `(mural_id, photo_id)`, unique `(mural_id, position) DEFERRABLE INITIALLY DEFERRED`, FKs para `murals` e `photo_assets`. O índice B-tree criado pela unique de posição também atende à leitura ordenada por `(mural_id, position)`, sem índice secundário duplicado. `PUT /photos/order` atualiza cada posição numa transação e a constraint deferred valida o conjunto final no commit, permitindo uma troca como `0↔1` sem colisão transitória.
 - `DELETE /photos/{photoId}` bloqueia/serializa a linha do ativo, confere referências antes de marcar `DELETED` e remover o objeto; rejeita ativo associado para impedir FK órfã e alteração silenciosa de mural. Se anexar vencer, o ativo/objeto ficam READY; se exclusão vencer, a associação posterior recusa o estado DELETED. Falha ao remover o objeto deixa-o privado para limpeza repetível.
 - CORS mantém os origins já configurados, permite `GET`, `POST`, `PUT`, `DELETE`, aceita `If-Match`, expõe `ETag` e não amplia origins.
+
+### Rastreabilidade do adendo de capa
+
+| Requisito | Acceptance | API/contrato | Evidência exigida |
+|---|---|---|---|
+| MEM-006-R19 | MEM-006-AC21 | MEM-006-API-02, MEM-004 MuralSummary | PostgreSQL + E2E Compose: primeiro attach grava vínculo/capa/versão atomicamente. |
+| MEM-006-R20 | MEM-006-AC22 | MEM-006-API-04, MEM-004 MuralSummary | PostgreSQL real: detach da capa aplica fallback/NULL e FK deferred valida commit; nenhum estado intermediário é visível. |

@@ -1,7 +1,7 @@
 # MEM-006 — Evidências de implementação
 
 **Branch:** `feature/mem-006-mural-photo-association`  
-**Status:** implementação e validação backend concluídas; aguardando revisão do juiz.
+**Status:** implementação e validação dos critérios base concluídas; AC20 no-store e AC21/22 capa inicial/fallback ainda não têm evidência automatizada e são gates antes de MEM-008 RED/GREEN.
 
 ## Rastreabilidade
 
@@ -15,12 +15,16 @@
 | AC16 POST | `MemoraMuralPhotoAssociationComposeIntegrationTest#AC16_postDatabaseFailureRollsBackLinksVersionAndUpdatedAt` injeta erro transacional por trigger PostgreSQL e confere rollback |
 | AC16 PUT | `MemoraMuralPhotoAssociationComposeIntegrationTest#AC16_putDatabaseFailureRollsBackPositionsVersionAndUpdatedAt` injeta erro transacional por trigger PostgreSQL e confere rollback |
 | AC16 DELETE | `MemoraMuralPhotoAssociationComposeIntegrationTest#AC16_deleteDatabaseFailureRollsBackLinksPositionsVersionAndUpdatedAt` injeta erro transacional por trigger PostgreSQL e confere rollback |
+| AC20 | **Pendente.** Estender a integração Compose para fazer GET da `previewUrl` diretamente no MinIO e afirmar `Cache-Control: private, no-store`; o GET assinado existente não inspecionou esse header. Não executar MEM-008 RED/GREEN até essa evidência passar. |
+| AC21–AC22 | **Pendente.** Acrescentar testes PostgreSQL reais e E2E Compose para capa definida no primeiro attach e fallback/NULL atômico no detach, verificando MuralSummary e incremento único de versão. |
 
 ### Rastreabilidade R–AC das falhas
 
 | Requisito | Acceptance | Verificação automatizada |
 |---|---|---|
 | MEM-006-R04, MEM-006-R12 | MEM-006-AC15 | MockMvc: segundo `PhotoStorage.presignGet` falha; resposta `503 dependency_unavailable` é sanitizada e não contém coleção parcial nem URL já gerada |
+| MEM-006-R18 | MEM-006-AC20 | **Pendente:** Compose deve confirmar o header `Cache-Control: private, no-store` na resposta direta de objeto do MinIO; execução anterior não verificou esse header. |
+| MEM-006-R19–R20 | MEM-006-AC21–AC22 | **Pendente:** PostgreSQL real + E2E devem verificar coverPhotoId inicial/fallback/NULL, FK e versão/timestamp em uma transação attach/detach. |
 | MEM-006-R08, MEM-006-R09, MEM-006-R16 | MEM-006-AC16 | PostgreSQL real no Compose: triggers de teste falham INSERT (POST), UPDATE (PUT) e DELETE; cada pedido responde 503 e preserva vínculos/ordem, `lock_version` e `updated_at` |
 
 ## Execuções
@@ -32,7 +36,7 @@
 | GREEN compile | `docker compose run --build --rm backend-tests mvn -B -DskipTests test-compile` após implementação | Passou para código principal e testes |
 | PostgreSQL/Migration | serviço Compose `backend` conectado ao PostgreSQL 17.11 | Flyway validou V1–V3 e aplicou `V3__create_mural_photos.sql`; startup JPA concluído |
 | Suíte unitária | `docker compose run --build --rm backend-tests mvn -B test` | 80 testes, 0 falhas/erros; 40 testes de integração ficaram skip por flags desativadas. Inclui AC15. |
-| Integração MEM-006 | PostgreSQL 17.11, backend e MinIO reais no Compose; `docker compose -f compose.yaml -f /tmp/memora-mem006-compose.override.yaml run --build --rm -e MEMORA_MURAL_PHOTO_INTEGRATION_TESTS=true backend-tests mvn -B -Dtest=MemoraMuralPhotoAssociationComposeIntegrationTest test` | 11 testes, 0 falhas/erros/skips. Inclui AC16 para falha transacional em POST/PUT/DELETE, GET assinado/CORS MinIO, isolamento de owner, swap deferred e corrida attach/delete. |
+| Integração MEM-006 | PostgreSQL 17.11, backend e MinIO reais no Compose; `docker compose -f compose.yaml -f /tmp/memora-mem006-compose.override.yaml run --build --rm -e MEMORA_MURAL_PHOTO_INTEGRATION_TESTS=true backend-tests mvn -B -Dtest=MemoraMuralPhotoAssociationComposeIntegrationTest test` | 11 testes, 0 falhas/erros/skips. Inclui AC16 para falha transacional em POST/PUT/DELETE, GET assinado/CORS MinIO, isolamento de owner, swap deferred e corrida attach/delete. O GET assinado não afirmou `Cache-Control` do objeto; portanto AC20 segue pendente. |
 | Cleanup das fixtures e do trigger | Consulta somente leitura no PostgreSQL após a integração | `0` murals de teste, `0` owners estrangeiros, `0` fotos estrangeiras; trigger e função de falha ausentes; migration V3 aplicada (`1`). |
 | Restauração do backend local | `docker compose up -d --force-recreate backend`; readiness e ambiente do container | Backend saudável (`/actuator/health/readiness` = `UP`); `MINIO_ENDPOINT_PUBLIC=http://localhost:9000` restaurado. |
 

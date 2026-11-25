@@ -1,0 +1,17 @@
+server:
+  servlet:
+    session:
+      timeout: 8h
+      cookie:
+        http-only: true
+        same-site: strict
+        secure: ${MEMORA_SESSION_COOKIE_SECURE:false}
+
+spring:
+  flyway:
+    ignore-migration-patterns: "*:missing"
+
+memora:
+  admin:
+    email: ${MEMORA_ADMIN_EMAIL:}
+    password: ${MEMORA_ADMIN_PASSWORD:}

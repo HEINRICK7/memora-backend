@@ -6,7 +6,7 @@
 
 ## 1. Objetivo e fronteira
 
-Backend responsável por identidades, murais persistentes, fotografias publicadas, permissões, links compartilhados, contribuições, moderação e acesso seguro ao armazenamento. O editor visual e a prévia local pertencem ao frontend; backend armazena documentos de composição versionados e arquivos quando o usuário solicita persistência/publicação.
+Backend responsável por identidades, murais persistentes, fotografias publicadas, permissões, links compartilhados, contribuições e acesso seguro ao armazenamento. No Modo Aniversário, cada convidado mantém seu álbum privado e escolhe quais fotos compartilhar no mural universal. O editor visual e a prévia local pertencem ao frontend; backend armazena documentos de composição versionados e arquivos quando o usuário solicita persistência/publicação.
 
 Não concentrar MediaPipe, motores AR ou renderização por frame no backend. Não criar microserviços prematuramente: iniciar com **monólito modular** e fronteiras claras.
 
@@ -71,7 +71,7 @@ src/test/java/.../
 - `Composition`: documento visual com template, slots, crop/transformações e camadas de texto; não é o mesmo que mural.
 - `PhotoAsset`: foto original e variantes derivadas; sem URLs permanentes públicas.
 - `ShareGrant`: autorização revogável associada a token opaco e escopo (`VIEW`/`CONTRIBUTE`).
-- `Contribution`: envio proposto por convidado, sujeito à moderação.
+- `Contribution`: foto enviada por convidado, inicialmente privada e publicada no mural universal quando o convidado a seleciona.
 - `Template`: definição versionada de layout. Pode ser estático no frontend no MVP, mas versões usadas em composições precisam ser estáveis.
 - `UserId`: UUID interno estável resolvido do principal.
 - `Owner`: usuário identificado pelo par OIDC `(issuer, sub)`; issuer e subject são armazenados separadamente para evitar colisão entre provedores.
@@ -97,7 +97,7 @@ DRAFT -> PUBLISHED -> ARCHIVED
 
 - Token criptograficamente aleatório, com entropia adequada; banco armazena apenas hash do segredo, mais metadados mínimos.
 - Token é emitido uma vez e mostrado ao criador; rotacionar cria novo segredo.
-- Papel `VIEW` não admite upload. Papel `CONTRIBUTE` admite envio, **não aprovação/edição**.
+- Papel `VIEW` não admite upload. Papel `CONTRIBUTE` admite envio; o convidado não pode editar ou remover fotos.
 - Grant pode ser revogado a qualquer momento, expirar, ser limitado por senha/código opcional e quota.
 - Não aceitar id enumerável como credencial suficiente.
 - Respostas para token inválido devem evitar vazamento de existência/identidade de mural.
@@ -105,14 +105,13 @@ DRAFT -> PUBLISHED -> ARCHIVED
 ### Contribution
 
 ```text
-PENDING -> APPROVED
-        -> REJECTED
+UPLOADING -> PUBLISHED
+         -> FAILED
 ```
 
-- Upload convidado permanece isolado do feed publicado até aprovação do dono.
-- Apenas dono/editor autorizado muda status.
-- Aprovação é idempotente; transições inválidas geram conflito de domínio.
-- Rejeição define política de retenção/remoção da foto original pendente.
+- Upload de convidado permanece privado no MinIO até ser validado e associado ao mural na conclusão.
+- A conclusão idempotente adiciona a foto ao mural e a torna visível no mesmo grant.
+- O evento usa o status `PUBLISHED`; status `APPROVED`/`REJECTED` permanece apenas para compatibilidade com dados anteriores.
 
 ### PhotoAsset
 
@@ -181,9 +180,9 @@ Criar interfaces para dependências voláteis, mas não embrulhar trivialmente t
 7. `SaveComposition` — valida documento e versão.
 8. `PublishMural` — verifica invariantes e altera status.
 9. `CreateShareGrant` / `RevokeShareGrant` — acesso view-only no MVP.
-10. `GetSharedMural` — resolve hash de token, estado, expiração e fotos aprovadas.
+10. `GetSharedMural` — resolve hash de token, estado, expiração e fotos publicadas.
 11. `SubmitContribution` — fase 2; autorização `CONTRIBUTE` e isolamento.
-12. `ApproveContribution` / `RejectContribution` — fase 2; ator autorizado.
+12. `OpenGuestAlbum` / `PublishGuestPhotos` — álbum privado por convidado e seleção explícita das fotos que entram no álbum universal, sem aprovação do anfitrião.
 13. `StartGooglePhotosImport` / `CompleteGooglePhotosImport` — fase 2; OAuth, sessão, media selected.
 
 Cada caso de uso nasce de spec comportamental e de teste RED antes da implementação.
@@ -223,13 +222,14 @@ O `PATCH /murals/{id}` altera somente título e/ou descrição enquanto o mural 
 | `POST` | `/murals/{id}/grants` | Criar link VIEW ou CONTRIBUTE |
 | `GET` | `/murals/{id}/grants` | Listar apenas metadados do dono |
 | `DELETE` | `/murals/{id}/grants/{grantId}` | Revogar |
+| `GET` | `/murals/{id}/qr-logo` | Obter logo salvo do aniversário |
+| `POST` | `/murals/{id}/qr-logo` | Salvar logo privado no MinIO |
+| `DELETE` | `/murals/{id}/qr-logo` | Remover logo do evento |
 | `GET` | `/shared/{shareToken}` | Obter mural acessível pelo token |
-| `POST` | `/shared/{shareToken}/contributions` | Solicitar contribuição (fase 2) |
-| `GET` | `/murals/{id}/contributions` | Listar pendentes do dono (fase 2) |
-| `POST` | `/murals/{id}/contributions/{cid}/approve` | Aprovar (fase 2) |
-| `POST` | `/murals/{id}/contributions/{cid}/reject` | Rejeitar (fase 2) |
+| `POST` | `/shared/{shareToken}/contributions` | Enviar foto pelo QR de aniversário; publicação automática |
+| `GET` | `/murals/{id}/contributions` | Consultar o histórico privado de fotos recebidas |
 
-Para uma rota de token em URL: **nunca usar links de mídia privados permanentes** na resposta. Retornar URLs temporárias somente após autorização. Aplicar `Cache-Control: private, no-store` aos dados de acesso compartilhado e conferir o risco de pré-visualizadores de redes sociais visitarem o link.
+Para uma rota de token em URL: **nunca usar links de mídia privados permanentes** na resposta. Retornar URLs temporárias somente após autorização. Aplicar `Cache-Control: private, no-store` aos dados de acesso compartilhado e conferir o risco de pré-visualizadores de redes sociais visitarem o link. O logo do QR fica no MinIO privado e o `GET /shared/{shareToken}` retorna URL assinada temporária para exibi-lo no evento.
 
 ## 10. Exemplos de contrato
 
@@ -359,9 +359,9 @@ Storage: separar `originals/private/`, `derived/private/`, `contributions/pendin
 - Mural não publica sem owner ou conteúdo válido quando a regra exigir.
 - Link view-only não permite contribuição.
 - Link expirado/revogado não autoriza visualização.
-- Contribuição PENDING não é listada como publicada.
-- Apenas dono autorizado aprova ou rejeita.
-- Transição `APPROVED -> PENDING` é inválida.
+- Contribuição válida entra no mural após upload e validação.
+- Convidados não podem editar ou remover fotos publicadas.
+- Conclusão repetida não cria outro vínculo para a mesma foto.
 - Composição rejeita documento inválido e asset não autorizado.
 
 ### Application tests (ports fake/in-memory sob contrato)
@@ -388,7 +388,7 @@ Storage: separar `originals/private/`, `derived/private/`, `contributions/pendin
 
 - Publicar e visualizar em anônimo por link válido.
 - Revogar link e comprovar bloqueio imediato.
-- Upload de convidado permanece invisível até aprovação.
+- Upload de convidado permanece invisível até o backend concluir validação e inserção no mural.
 - Falhas de armazenamento não tornam mídia parcialmente pública.
 
 ## 16. Operação e observabilidade
@@ -410,7 +410,7 @@ Storage: separar `originals/private/`, `derived/private/`, `contributions/pendin
 
 **M4 — Compartilhamento:** token view-only, revoke, resolução de mural convidado, logs seguros e E2E.
 
-**M5 — Colaboração:** novos grants, upload convidado, moderação e limites.
+**M5 — Colaboração:** novos grants, upload convidado, publicação automática e limites.
 
 **M6 — Google Fotos:** integração oficial, consentimento, tratamento de expirados/erros, verificação fim a fim.
 

@@ -1,5 +1,13 @@
 # MEM-002 — Decisões
 
+## MEM-002-ADR-09 — Reservar campos aditivos no MuralSummary
+
+**Decisão proposta:** todos os responses de `MuralSummary` incluem `coverPhotoId` e `publishedAt` anuláveis; MEM-002 cria os dois como null.
+
+**Motivo:** MEM-004/MEM-008 estendem a mesma representação de mural sem exigir schema distinto para cada tela.
+
+**Consequência:** atualizar MEM-002 OpenAPI/acceptance antes de testes de contrato MEM-008. Esses campos não concedem leitura pública nem mudam status.
+
 ## MEM-002-ADR-01 — Identidade interna e issuer
 
 `UserId` é UUID aleatório; usuários identificam-se pelo par separado `(identity_issuer, identity_subject)` com constraint única. JWT validado fornece `iss` e `sub`; local usa `urn:memora:local` e `local-development-owner`. O issuer configurado é aplicado ao backfill de subjects V1 por placeholder Flyway. Trocar de provedor não mescla usuários automaticamente; exige fluxo futuro de vinculação.

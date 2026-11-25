@@ -47,6 +47,10 @@ Resposta 200 OK:
 
 A operação é idempotente quando o ativo já está READY e continua pertencendo ao mesmo proprietário. O backend inspeciona o objeto armazenado antes da transição. Se houver divergência, não expõe chave nem URL de objeto.
 
+O `previewUrl` é uma URL GET assinada com o override S3 `response-cache-control=private, no-store`. O header deve aparecer no GET real servido pelo MinIO; `Cache-Control` da resposta da API não substitui esse header. TTL de leitura preservado: cinco minutos.
+
+Essa URL continua sendo apenas para o proprietário e aponta ao original privado. `POST /complete` gera também a variante interna `SHARE_VIEW`; nenhum key/URL da variante é serializado. A conclusão permanece idempotente e confirma variante READY antes de anunciar sucesso de preparação para compartilhamento.
+
 ## MEM-001-API-04 — Listar fotos READY
 
 GET /api/v1/photos
@@ -66,7 +70,9 @@ Resposta 200 OK:
       ]
     }
 
-Somente fotos READY do proprietário atual aparecem. URLs são temporários e nunca armazenados no banco.
+Somente fotos READY do proprietário atual aparecem. URLs são temporários e nunca armazenados no banco. Cada `previewUrl` usa o override S3 `response-cache-control=private, no-store`; o cliente recebe esse header ao buscar o objeto diretamente no MinIO. TTL de leitura preservado: cinco minutos.
+
+`GET /photos` continua emitindo somente URL privada owner para o original; a resposta não inclui `share_view_storage_key`, estado interno de processamento ou URL da variante.
 
 ## MEM-001-API-05 — Excluir fotografia
 
@@ -90,3 +96,23 @@ DELETE /api/v1/photos/{photoId} retorna 204 No Content quando a foto pertence ao
 - PostgreSQL guarda owner, chave interna, MIME verificado, tamanho, dimensões e estado.
 - MinIO guarda o objeto em bucket privado com chave aleatória gerada pelo backend.
 - O contrato público nunca contém storageKey.
+
+## Rastreabilidade do requisito de cache de mídia
+
+| Requisito | Acceptance | API | Prova requerida |
+|---|---|---|---|
+| MEM-001-R13 | MEM-001-AC11 | MEM-001-API-03 e MEM-001-API-04 | Compose: GET da URL assinada contra MinIO retorna `Cache-Control: private, no-store`. |
+
+## Rastreabilidade R–AC–API da variante
+
+| Requisito | Acceptance | API/infra | Prova |
+|---|---|---|---|
+| MEM-001-R14 | MEM-001-AC12 | MEM-001-API-03, `PhotoStorage` | Compose MinIO: original preservado por hash; bytes SHARE_VIEW confirmam lado maior ≤2560 px sem upscaling, proporção/orientação correta e ausência de GPS/EXIF/XMP; transformação usa decode/subsampling bounded sem alegação de latência. |
+| MEM-001-R15 | MEM-001-AC13 | MEM-001-API-03, migration V4, MEM-008-BE-API-03 | PostgreSQL + MinIO reais: READY legado começa PENDING; publish gera variante idempotente antes da transação e falha deixa DRAFT sem grant. |
+| MEM-001-R16 | MEM-001-AC14 | MEM-001-API-05, `DeletePhoto`/`PhotoStorage` | Falha injetada: nenhum presign após DELETED; retry limpa ambos os objetos e não toca outros assets. |
+
+### Persistência V4 de variante
+
+V4 adiciona em `photo_assets` campos internos `share_view_status`, `share_view_storage_key`, `share_view_content_type`, `share_view_size_bytes`, `share_view_width`, `share_view_height`, `share_view_processor_version` e `share_view_ready_at`. Só `share_view_status=READY` pode ter key e metadados completos; nenhum campo é retornado ao cliente. Todas as fotos preexistentes em `READY` são iniciadas como `PENDING`, sem a migration alegar que transformou bytes.
+
+Uploads novos só passam a `READY` depois de gerar/validar `SHARE_VIEW` idempotentemente. Para fotos READY anteriores, `PublishMural` detecta `PENDING`, lê o original privado, gera e valida `derived/private/share-view/v1/` e persiste READY de forma repetível antes de iniciar a transação que muda o mural para `PUBLISHED`. Se qualquer variante falhar, publicação termina sem alteração de estado/versão/timestamp e sem grant; o original permanece intacto e a próxima tentativa repete com o mesmo destino. Não há comando/etapa manual no fluxo MVP local. GET compartilhado consulta e assina exclusivamente `share_view_storage_key` com estado READY; nunca usa `storage_key` original como fallback.

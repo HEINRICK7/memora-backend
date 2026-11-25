@@ -9,6 +9,11 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtDecoders;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,14 +35,42 @@ class SecurityConfiguration {
 
     @Bean
     @Profile("local")
-    SecurityFilterChain localSecurity(HttpSecurity http) throws Exception {
+    SecurityFilterChain localSecurity(HttpSecurity http,
+                                     SecurityContextRepository securityContextRepository,
+                                     CookieCsrfTokenRepository csrfTokenRepository) throws Exception {
         return http
-                .csrf(csrf -> csrf.disable())
+                .securityContext(context -> context.securityContextRepository(securityContextRepository))
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                        .sessionFixation(fixation -> fixation.migrateSession()))
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfTokenRepository)
+                        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                        .ignoringRequestMatchers("/api/v1/shared/**"))
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**").permitAll()
-                        .anyRequest().permitAll())
+                        .requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
+                        .requestMatchers("/api/v1/shared/**").permitAll()
+                        .anyRequest().hasRole("ADMIN"))
+                .exceptionHandling(errors -> errors
+                        .authenticationEntryPoint(problemEntryPoint())
+                        .accessDeniedHandler(problemDeniedHandler()))
                 .build();
+    }
+
+    @Bean
+    @Profile("local")
+    SecurityContextRepository localSecurityContextRepository() {
+        return new HttpSessionSecurityContextRepository();
+    }
+
+    @Bean
+    @Profile("local")
+    CookieCsrfTokenRepository localCsrfTokenRepository() {
+        CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        repository.setCookiePath("/");
+        return repository;
     }
 
     @Bean

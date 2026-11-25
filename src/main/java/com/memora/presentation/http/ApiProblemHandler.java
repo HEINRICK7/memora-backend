@@ -9,7 +9,9 @@ import com.memora.application.mural.MuralStaleVersionException;
 import com.memora.application.mural.MuralPhotoResourceNotFoundException;
 import com.memora.application.mural.PhotoNotReadyException;
 import com.memora.domain.mural.InvalidMuralPhotoOrderException;
+import com.memora.domain.mural.MuralPhotoLimitExceededException;
 import com.memora.domain.mural.MuralPhotoNotFoundException;
+import com.memora.domain.photo.PhotoQuotaExceededException;
 import com.memora.domain.photo.PhotoStateConflictException;
 import com.memora.domain.photo.PhotoValidationException;
 import com.memora.domain.photo.UploadExpiredException;
@@ -22,6 +24,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -35,6 +39,34 @@ import java.util.UUID;
 
 @RestControllerAdvice
 public class ApiProblemHandler {
+    private static final Logger log = LoggerFactory.getLogger(ApiProblemHandler.class);
+
+    @ExceptionHandler(BirthdayModeException.class)
+    ResponseEntity<ProblemDetail> birthdayMode(BirthdayModeException exception, HttpServletRequest request) {
+        return problem(exception.status(), exception.code(), exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    ResponseEntity<ProblemDetail> rateLimited(RateLimitExceededException exception, HttpServletRequest request) {
+        ResponseEntity<ProblemDetail> base = problem(
+                HttpStatus.TOO_MANY_REQUESTS, "rate_limit_exceeded", exception.getMessage(), request
+        );
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .headers(base.getHeaders())
+                .header("Retry-After", Long.toString(exception.retryAfterSeconds()))
+                .body(base.getBody());
+    }
+
+    @ExceptionHandler(PhotoQuotaExceededException.class)
+    ResponseEntity<ProblemDetail> photoQuotaExceeded(PhotoQuotaExceededException exception, HttpServletRequest request) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "photo_quota_exceeded", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(MuralPhotoLimitExceededException.class)
+    ResponseEntity<ProblemDetail> muralPhotoLimitExceeded(MuralPhotoLimitExceededException exception, HttpServletRequest request) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "mural_photo_limit_exceeded", exception.getMessage(), request);
+    }
+
     @ExceptionHandler(PhotoValidationException.class)
     ResponseEntity<ProblemDetail> validation(PhotoValidationException exception, HttpServletRequest request) {
         HttpStatus status = switch (exception.code()) {
@@ -152,8 +184,12 @@ public class ApiProblemHandler {
 
     @ExceptionHandler({SdkException.class, DataAccessException.class})
     ResponseEntity<ProblemDetail> dependencyUnavailable(Exception exception, HttpServletRequest request) {
+        String traceId = UUID.randomUUID().toString();
+        log.warn("Dependency failure traceId={} method={} path={} type={} message={}", traceId,
+                request.getMethod(), request.getRequestURI(), exception.getClass().getSimpleName(),
+                exception.getMessage(), exception);
         return problem(HttpStatus.SERVICE_UNAVAILABLE, "dependency_unavailable",
-                "Uma dependência está temporariamente indisponível.", request);
+                "Uma dependência está temporariamente indisponível.", request, traceId);
     }
 
     @ExceptionHandler(Exception.class)
@@ -164,10 +200,15 @@ public class ApiProblemHandler {
 
     private ResponseEntity<ProblemDetail> problem(HttpStatus status, String code, String detail,
                                                    HttpServletRequest request) {
+        return problem(status, code, detail, request, UUID.randomUUID().toString());
+    }
+
+    private ResponseEntity<ProblemDetail> problem(HttpStatus status, String code, String detail,
+                                                   HttpServletRequest request, String traceId) {
         ProblemDetail body = ProblemDetail.forStatusAndDetail(status, detail);
         body.setType(URI.create("about:blank"));
         body.setProperty("code", code);
-        body.setProperty("traceId", UUID.randomUUID().toString());
+        body.setProperty("traceId", traceId);
         return ResponseEntity.status(status)
                 .header("X-Trace-Id", body.getProperties().get("traceId").toString())
                 .body(body);

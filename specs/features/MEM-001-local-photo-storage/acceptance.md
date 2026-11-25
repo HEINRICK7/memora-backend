@@ -76,3 +76,36 @@
 - se a transição de exclusão para DELETED concluir primeiro, associação responde `409 photo_not_ready`, nenhuma associação é criada e o objeto é removido ou fica privado para retry.\
 **And** não há erro de FK não tratado, vínculo para ativo DELETED ou objeto disponível publicamente\
 **And** se a remoção MinIO falhar depois da exclusão aceita, o objeto continua privado e a limpeza pode ser repetida.
+
+## MEM-001-AC11 — Não armazenar em cache a resposta do objeto privado
+
+**Given** uma fotografia READY e uma URL GET assinada emitida pela API com TTL vigente de cinco minutos\
+**When** o cliente busca os bytes diretamente no MinIO usando essa URL\
+**Then** MinIO responde `Cache-Control: private, no-store` no GET do objeto\
+**And** o teste Compose confirma o header na resposta real do MinIO, não somente na resposta JSON da API\
+**And** a URL PUT de upload não é alterada por esta política.
+
+## MEM-001-AC12 — Gerar variante SHARE_VIEW mantendo o original privado
+
+**Given** uma imagem JPEG de origem maior que 2560 px, com GPS EXIF e orientação 6, ou PNG grande com chunks eXIf/XMP\
+**When** o upload é concluído\
+**Then** o original em `originals/private/` permanece byte a byte igual e acessível somente por leitura privada autorizada\
+**And** é criada uma variante privada `SHARE_VIEW` que aplica rotação visual e remove GPS, EXIF e XMP\
+**And** o maior lado do preview SHARE_VIEW não ultrapassa 2560 px, não há upscaling, proporção e orientação visual são preservadas, perfil de cor é mantido e qualidade visual atende ao critério do formato\
+**And** nenhum storage key ou URL da variante é exposto no contrato de owner.
+
+## MEM-001-AC13 — Gerar READY legado automaticamente antes de publicar
+
+**Given** fotos READY preexistentes sem variante após a migration V4\
+**When** o proprietário publica um mural que contém essa foto e o backend prepara as variantes antes da transação de publicação\
+**Then** cada variante é gerada idempotentemente por `photoId`/versão do processador e verificada antes de `READY`\
+**And** os bytes dos originais não mudam\
+**And** falha de geração mantém o mural `DRAFT`, não cria grant e permite retry\
+**And** nenhuma leitura compartilhada assina ou usa o original.
+
+## MEM-001-AC14 — Falhar sem fallback e limpar ambas as chaves
+
+**Given** falha ao criar ou remover a variante derivada\
+**When** upload é repetido ou a pessoa exclui a foto sem vínculos\
+**Then** o original permanece privado e não é emitido como substituto para compartilhamento\
+**And** exclusão impede novos presigns e retry remove original e variante restantes sem apagar outros assets.

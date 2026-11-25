@@ -87,7 +87,17 @@ Respostas: `200`, `400`, `401`, `404`, `503`.
 - `title`: string normalizada, 1–100 pontos de código Unicode.
 - `description`: string ou `null`, normalizada, máximo 500 pontos de código.
 - `createdAt`, `updatedAt`: timestamps RFC 3339 UTC; iguais em criação.
+- `coverPhotoId`: UUID ou `null`; `null` em rascunhos sem capa selecionada.
+- `publishedAt`: timestamp RFC 3339 UTC ou `null`; `null` enquanto o mural não estiver publicado.
 - Owner interno, issuer, subject, storage key, hash e idempotency key não são serializados.
+
+MEM-002-API-01/02/03 sempre serializam ambos os campos. MEM-002 cria somente `DRAFT`, portanto create/list/get retornam `coverPhotoId: null` e `publishedAt: null`; MEM-004/MEM-008 atualizam os mesmos campos nos endpoints versionados correspondentes.
+
+## Rastreabilidade do MuralSummary aditivo
+
+| Requisito | Acceptance | API | OpenAPI |
+|---|---|---|---|
+| MEM-002-R14 | MEM-002-AC19 | MEM-002-API-01/02/03 | `MuralSummary.coverPhotoId`, `MuralSummary.publishedAt` |
 
 ## Problem Details
 

@@ -14,4 +14,4 @@ Omitido significa “preservar”; `description: null` significa limpar. Um patc
 
 ## MEM-004-ADR-03 — Apenas rascunhos
 
-Publicação e suas regras de consistência ainda não existem. Atualizar somente `DRAFT` impede alterar silenciosamente uma representação já publicada. Capa está fora deste contrato porque não há coluna nem política de ownership implementada para ela.
+Publicação e suas regras de consistência ainda não existem. Atualizar somente `DRAFT` impede alterar silenciosamente uma representação já publicada. Este ADR foi estendido pelo adendo MEM-004-R15/MEM-004-API-05: PATCH de capa exige DRAFT, ownership, READY e vínculo ao mural; capa automática inicial/fallback no detach pertencem ao MEM-006.

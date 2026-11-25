@@ -16,7 +16,9 @@ public record PhotoAsset(
         Integer width,
         Integer height,
         Instant readyAt,
-        Instant deletedAt
+        Instant deletedAt,
+        String shareViewStorageKey,
+        String thumbnailStorageKey
 ) {
     public PhotoAsset {
         Objects.requireNonNull(id, "id");
@@ -48,7 +50,7 @@ public record PhotoAsset(
     ) {
         return new PhotoAsset(
                 id, ownerId, storageKey, metadata.contentType(), metadata.sizeBytes(),
-                PhotoStatus.UPLOADING, createdAt, intentExpiresAt, null, null, null, null
+                PhotoStatus.UPLOADING, createdAt, intentExpiresAt, null, null, null, null, null, null
         );
     }
 
@@ -66,10 +68,41 @@ public record PhotoAsset(
             Instant readyAt,
             Instant deletedAt
     ) {
+        return restore(id, ownerId, storageKey, contentType, sizeBytes, status, createdAt,
+                intentExpiresAt, width, height, readyAt, deletedAt, null, null);
+    }
+
+    public static PhotoAsset restore(
+            UUID id,
+            String ownerId,
+            String storageKey,
+            String contentType,
+            long sizeBytes,
+            PhotoStatus status,
+            Instant createdAt,
+            Instant intentExpiresAt,
+            Integer width,
+            Integer height,
+            Instant readyAt,
+            Instant deletedAt,
+            String shareViewStorageKey,
+            String thumbnailStorageKey
+    ) {
         return new PhotoAsset(
                 id, ownerId, storageKey, contentType, sizeBytes, status, createdAt,
-                intentExpiresAt, width, height, readyAt, deletedAt
+                intentExpiresAt, width, height, readyAt, deletedAt, shareViewStorageKey, thumbnailStorageKey
         );
+    }
+
+    public String bestPreviewKey() {
+        return shareViewStorageKey != null && !shareViewStorageKey.isBlank() ? shareViewStorageKey : storageKey;
+    }
+
+    public String bestThumbnailKey() {
+        if (thumbnailStorageKey != null && !thumbnailStorageKey.isBlank()) {
+            return thumbnailStorageKey;
+        }
+        return bestPreviewKey();
     }
 
     public PhotoAsset confirm(InspectedImage actual, Instant now) {
@@ -90,7 +123,8 @@ public record PhotoAsset(
         }
         return new PhotoAsset(
                 id, ownerId, storageKey, contentType, sizeBytes, PhotoStatus.READY,
-                createdAt, intentExpiresAt, actual.width(), actual.height(), now, null
+                createdAt, intentExpiresAt, actual.width(), actual.height(), now, null,
+                shareViewStorageKey, thumbnailStorageKey
         );
     }
 
@@ -100,7 +134,7 @@ public record PhotoAsset(
         }
         return new PhotoAsset(
                 id, ownerId, storageKey, contentType, sizeBytes, PhotoStatus.FAILED,
-                createdAt, intentExpiresAt, null, null, null, null
+                createdAt, intentExpiresAt, null, null, null, null, null, null
         );
     }
 
@@ -110,7 +144,8 @@ public record PhotoAsset(
         }
         return new PhotoAsset(
                 id, ownerId, storageKey, contentType, sizeBytes, PhotoStatus.DELETED,
-                createdAt, intentExpiresAt, width, height, readyAt, now
+                createdAt, intentExpiresAt, width, height, readyAt, now,
+                shareViewStorageKey, thumbnailStorageKey
         );
     }
 }

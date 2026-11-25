@@ -10,6 +10,10 @@ public record StorageProperties(
         String accessKey,
         String secretKey,
         String region,
-        long maxUploadBytes
+        long maxUploadBytes,
+        Integer maxConcurrentProcessing
 ) {
+    public int effectiveMaxConcurrentProcessing() {
+        return maxConcurrentProcessing == null || maxConcurrentProcessing <= 0 ? 4 : maxConcurrentProcessing;
+    }
 }

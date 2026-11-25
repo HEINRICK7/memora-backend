@@ -1,0 +1,1 @@
+ALTER TABLE murals ADD COLUMN IF NOT EXISTS qr_logo_storage_key VARCHAR(512);

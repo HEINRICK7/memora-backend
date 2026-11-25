@@ -29,6 +29,7 @@ Depois de guardar fotografias, a pessoa precisa organizá-las em projetos persis
 - **MEM-002-R11:** `/meus-murais` oferece criação, filtros de status, paginação manual, vazios, carregamento, erro inicial, erro de próxima página e sessão não autenticada sem tratar `401` como lista vazia.
 - **MEM-002-R12:** formulário usa labels, mensagens associadas aos campos, contagem em pontos de código, bloqueia envio duplicado e reusa o mesmo `Idempotency-Key` ao repetir uma solicitação ambígua com o mesmo conteúdo. O mural criado aparece no topo da lista de Rascunhos; após sucesso, filtro muda para Rascunhos e a paginação reinicia. Não há ação de editor/publicação.
 - **MEM-002-R13:** controles interativos medem no mínimo 44×44 CSS px, mantêm foco após carregar mais e anunciam estados/resultados por região acessível.
+- **MEM-002-R14:** o `MuralSummary` compartilhado por create/list/get inclui `coverPhotoId: UUID | null` e `publishedAt: RFC 3339 UTC | null`; rascunho novo retorna ambos null até a feature de capa/publicação atualizá-los.
 
 ## Estados e regras
 
@@ -77,6 +78,7 @@ Este workspace não tem instância de produção nem deploy rolling. V2 faz cort
 7. Reiniciar a stack conserva usuário, mural, propriedade das fotos e objetos MinIO.
 8. A tela não trata 401 como vazio nem declara publicação, edição ou login ainda não implementados.
 9. Um banco sem fotografias também consegue resolver o principal local ou uma primeira identidade JWT para um `UserId` persistente e estável.
+10. Create/list/get mantêm os dois campos aditivos de `MuralSummary` presentes e null em `DRAFT` ainda não publicado.
 
 ## Decisões abertas
 
