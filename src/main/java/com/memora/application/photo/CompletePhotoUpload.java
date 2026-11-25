@@ -63,10 +63,19 @@ public final class CompletePhotoUpload {
             PhotoAsset persisted = repository.saveReadyWithDerivatives(
                     ready, shareViewKey, processed.shareView(), thumbnailKey, processed.thumbnail(), now
             );
+            deleteTemporaryOriginalQuietly(asset.storageKey());
             return view(persisted);
         } catch (PhotoValidationException | UploadExpiredException invalidUpload) {
             failAndCleanup(asset);
             throw invalidUpload;
+        }
+    }
+
+    private void deleteTemporaryOriginalQuietly(String storageKey) {
+        try {
+            storage.delete(storageKey);
+        } catch (RuntimeException ignored) {
+            // Best-effort cleanup of raw upload once READY derivatives are persisted.
         }
     }
 

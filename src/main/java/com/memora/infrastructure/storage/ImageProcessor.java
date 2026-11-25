@@ -27,10 +27,10 @@ import java.util.Locale;
 
 public final class ImageProcessor {
     public static final long MAX_PIXELS = 250_000_000L;
-    public static final int SHARE_VIEW_MAX_SIDE = 2560;
+    public static final int SHARE_VIEW_MAX_SIDE = 2048;
     public static final int THUMBNAIL_MAX_SIDE = 480;
-    private static final float SHARE_VIEW_JPEG_QUALITY = 0.85f;
-    private static final float THUMBNAIL_JPEG_QUALITY = 0.80f;
+    private static final float SHARE_VIEW_JPEG_QUALITY = 0.84f;
+    private static final float THUMBNAIL_JPEG_QUALITY = 0.78f;
 
     public record ProcessedResult(
             InspectedImage original,

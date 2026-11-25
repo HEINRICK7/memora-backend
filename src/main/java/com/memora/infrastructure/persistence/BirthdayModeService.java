@@ -146,6 +146,7 @@ public class BirthdayModeService {
                     processed.shareView().width(), processed.shareView().height(), timestamp(clock.instant()),
                     thumbnailKey, processed.thumbnail().width(), processed.thumbnail().height(),
                     processed.thumbnail().sizeBytes(), source.photoId()));
+            deleteStorageKeyQuietly(source.storageKey());
         }
 
         // Phase 3 (short TX): lock mural row, re-verify state/invariants, and mark PUBLISHED.
@@ -518,7 +519,7 @@ public class BirthdayModeService {
         }
 
         // Phase 3 (short TX): lock contribution row, persist READY + derivatives, and optionally publish directly.
-        return tx.execute(status -> {
+        ContributionReceipt receipt = tx.execute(status -> {
             GrantContext grant = resolveGrant(shareToken, true);
             GuestAlbumRow album = resolveGuestAlbum(grant, guestToken);
             List<UploadRow> lockedRows = jdbc.query("""
@@ -582,6 +583,8 @@ public class BirthdayModeService {
                     """, timestamp(now), contributionId);
             return new ContributionReceipt(contributionId, locked.photoId(), "PUBLISHED");
         });
+        deleteStorageKeyQuietly(upload.storageKey());
+        return receipt;
     }
 
     /**

@@ -46,9 +46,9 @@ class ImageProcessorTest {
         assertThat(result.original().height()).isEqualTo(3200);
         assertThat(result.original().contentType()).isEqualTo("image/jpeg");
 
-        // Share view scaled smoothly to <= 2560 on longest edge, preserving 1:2 portrait aspect
-        assertThat(result.shareView().width()).isEqualTo(1280);
-        assertThat(result.shareView().height()).isEqualTo(2560);
+        // Share view scaled smoothly to <= 2048 on longest edge, preserving 1:2 portrait aspect
+        assertThat(result.shareView().width()).isEqualTo(1024);
+        assertThat(result.shareView().height()).isEqualTo(2048);
         assertThat(result.shareViewBytes()).isNotEmpty();
 
         // Thumbnail scaled smoothly to <= 480 on longest edge

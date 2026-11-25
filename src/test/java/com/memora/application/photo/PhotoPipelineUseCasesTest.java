@@ -75,6 +75,7 @@ class PhotoPipelineUseCasesTest {
         assertThat(view.previewUrl()).contains("derived/private/share-view/v1/" + id + ".jpg");
         assertThat(view.thumbnailUrl()).contains("derived/private/thumb/v1/" + id + ".jpg");
         assertThat(view.previewExpiresAt()).isEqualTo(NOW.plus(Duration.ofMinutes(15)));
+        assertThat(storage.deletedKeys).containsExactly("originals/private/" + id);
     }
 
     @Test
